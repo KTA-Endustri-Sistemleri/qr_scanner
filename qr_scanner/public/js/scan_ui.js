@@ -18,7 +18,7 @@
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        ...(csrf ? {'X-Frappe-CSRF-Token': csrf} : {}) // varsa ekle
+        'X-Frappe-CSRF-Token': window.__csrf
       },
       body: JSON.stringify({ qr_code: code, scanned_via: 'USB Scanner' })
     });

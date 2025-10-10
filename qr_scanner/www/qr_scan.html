@@ -1,0 +1,19 @@
+<!-- apps/qr_scanner/qr_scanner/public/qr_scan.html -->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"><title>QR Scan</title>
+    <script>window.__csrf = "{{ csrf_token }}";</script>
+  </head>
+  <body>
+    <h1>QR Scan</h1>
+    <input id="qr_input" placeholder="USB scanner here" autofocus />
+    <button id="submit_btn">Send</button>
+    <button id="start_cam">Start Camera</button>
+    <video id="preview" playsinline style="max-width:420px;"></video>
+    <pre id="log"></pre>
+
+    <!-- DİKKAT: public/js → /assets/qr_scanner/js/... olarak çağırılır -->
+    <script src="/assets/qr_scanner/js/scan_ui.js"></script>
+  </body>
+</html>
