@@ -1,0 +1,26 @@
+{
+  "doctype": "DocType",
+  "name": "QR Scan Record",
+  "module": "QR Scanner",
+  "custom": 0,
+  "istable": 0,
+  "editable_grid": 0,
+  "track_changes": 1,
+  "title_field": "qr_code",
+  "autoname": "field:qr_code",
+  "fields": [
+    {"fieldname": "qr_code", "fieldtype": "Data", "label": "QR Code", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
+    {"fieldname": "scan_time", "fieldtype": "Datetime", "label": "Scan Time", "default": "Now", "in_list_view": 1},
+    {"fieldname": "scanned_by", "fieldtype": "Link", "options": "User", "label": "Scanned By", "in_list_view": 1},
+    {"fieldname": "scanned_via", "fieldtype": "Select", "label": "Scanned Via", "options": "USB Scanner\nMobile Camera\nAPI", "in_list_view": 1},
+    {"fieldname": "device_id", "fieldtype": "Data", "label": "Device ID"},
+    {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "New\nValidated\nRejected", "default": "New", "in_list_view": 1},
+    {"fieldname": "is_duplicate", "fieldtype": "Check", "label": "Is Duplicate"},
+    {"fieldname": "metadata", "fieldtype": "Small Text", "label": "Metadata (JSON)"}
+  ],
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "QR Scanner Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "QR Scanner User", "read": 1, "write": 0, "create": 1, "delete": 0}
+  ]
+}
