@@ -1,6 +1,13 @@
 import frappe
 from frappe import _
 
+import frappe
+
+@frappe.whitelist()
+def get_csrf():
+    return {"csrf_token": frappe.sessions.get_csrf_token()}
+
+
 @frappe.whitelist()
 def create_scan(qr_code: str, scanned_via: str = "USB Scanner", device_id: str | None = None):
     qr_code = (qr_code or "").strip()

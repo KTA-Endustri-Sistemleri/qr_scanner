@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>QR Scan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family: system-ui; padding:16px}
+    #preview{max-width:420px;border:1px solid #ddd;border-radius:8px}
+  </style>
+</head>
+<body>
+  <h1>QR Scan</h1>
+
+  <input id="qr_input" placeholder="USB scanner here" autofocus />
+  <button id="submit_btn">Send</button>
+  <button id="start_cam">Start Camera</button>
+
+  <div><video id="preview" playsinline></video></div>
+  <pre id="log"></pre>
+
+  <!-- CSRF token'ı HTML'e göm -->
+  <script>window.__csrf = "{{ csrf_token }}";</script>
+  <!-- Public JS: public/js/scan_ui.js -> /assets/qr_scanner/js/scan_ui.js -->
+  <!-- jsQR: QR decode kütüphanesi -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script src="/assets/qr_scanner/js/scan_ui.js"></script>
+</body>
+</html>
