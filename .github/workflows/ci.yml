@@ -4,11 +4,11 @@ name: CI
 on:
   push:
     branches:
-      - develop
+      - main
   pull_request:
 
 concurrency:
-  group: develop-qr_scanner-${{ github.event.number }}
+  group: main-qr_scanner-${{ github.event.number }}
   cancel-in-progress: true
 
 jobs:
