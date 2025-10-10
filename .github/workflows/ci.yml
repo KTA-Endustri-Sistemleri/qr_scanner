@@ -1,131 +1,121 @@
- name: CI
+name: CI
 
- on:
-   push:
-     branches:
-       - main
-   pull_request:
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
- concurrency:
-   group: main-qr_scanner-${{ github.event.number }}
-   cancel-in-progress: true
+concurrency:
+  # PR’larda numara var; push(main) için yoksa tekil anahtar kullanır.
+  group: main-qr_scanner-${{ github.event.number || github.run_id }}
+  cancel-in-progress: true
 
- jobs:
-   tests:
-     runs-on: ubuntu-latest
-     strategy:
-       fail-fast: false
-     name: Server
+jobs:
+  tests:
+    name: Server
+    runs-on: ubuntu-latest
 
-     services:
-       redis-cache:
-         image: redis:alpine
-         ports:
-           - 13000:6379
-       redis-queue:
-         image: redis:alpine
-         ports:
-           - 11000:6379
-       mariadb:
-         image: mariadb:10.6
-         env:
-           MYSQL_ROOT_PASSWORD: root
-         ports:
-           - 3306:3306
--        options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
-+        options: >-
-+          --health-cmd="mariadb-admin ping -uroot -proot --silent"
-+          --health-interval=5s
-+          --health-timeout=2s
-+          --health-retries=12
-+          --health-start-period=20s
+    services:
+      redis-cache:
+        image: redis:alpine
+        ports:
+          - 13000:6379
+      redis-queue:
+        image: redis:alpine
+        ports:
+          - 11000:6379
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=12
+          --health-start-period=20s
 
-     steps:
-       - name: Clone
-         uses: actions/checkout@v3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
--      - name: Find tests
--        run: |
--          echo "Finding tests"
--          grep -rn "def test" > /dev/null
-+      # İsteğe bağlı: test dosyası yoksa job fail etmesin
-+      - name: Find tests (optional)
-+        run: |
-+          echo "Finding tests (non-blocking)"
-+          grep -rn "def test" || echo "No tests found"
+      # (İsteğe bağlı) Test dosyası yoksa job fail etmesin
+      - name: Find tests (optional)
+        run: |
+          echo "Finding tests (non-blocking)"
+          grep -rn "def test" || echo "No tests found"
 
-       - name: Setup Python
-         uses: actions/setup-python@v4
-         with:
-           python-version: '3.10'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-       - name: Setup Node
-         uses: actions/setup-node@v3
-         with:
-           node-version: 18
-           check-latest: true
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          check-latest: true
 
-+      - name: Install Yarn (needed by bench)
-+        run: npm i -g yarn
-+
-       - name: Cache pip
-         uses: actions/cache@v4
-         with:
-           path: ~/.cache/pip
-           key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
-           restore-keys: |
-             ${{ runner.os }}-pip-
-             ${{ runner.os }}-
+      - name: Install Yarn
+        run: npm i -g yarn
 
-       - name: Get yarn cache directory path
-         id: yarn-cache-dir-path
-         run: 'echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT'
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            ${{ runner.os }}-
 
-       - uses: actions/cache@v4
-         id: yarn-cache
-         with:
-           path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-           restore-keys: |
-             ${{ runner.os }}-yarn-
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
 
--      - name: Install MariaDB Client
--        run: sudo apt-get install mariadb-client-10.6
-+      - name: Install MariaDB Client
-+        run: |
-+          sudo apt-get update
-+          sudo apt-get install -y mariadb-client
+      - name: Cache yarn
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
 
-       - name: Setup
-         run: |
-           pip install frappe-bench
-           bench init --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
--          mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
--          mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
-+          # DB hazır olana kadar bekle
-+          for i in {1..30}; do
-+            mariadb -h 127.0.0.1 -P 3306 -uroot -proot -e "SELECT 1" && break
-+            echo "Waiting for MariaDB..."
-+            sleep 2
-+          done
-+          mariadb -h 127.0.0.1 -P 3306 -uroot -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
-+          mariadb -h 127.0.0.1 -P 3306 -uroot -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
+      - name: Install MariaDB Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mariadb-client
 
-       - name: Install
-         working-directory: /home/runner/frappe-bench
-         run: |
-           bench get-app qr_scanner $GITHUB_WORKSPACE
-           bench setup requirements --dev
-           bench new-site --db-root-password root --admin-password admin test_site
-           bench --site test_site install-app qr_scanner
-           bench build
-         env:
-           CI: 'Yes'
+      - name: Setup bench and DB
+        run: |
+          pip install frappe-bench
+          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
+          # DB hazır olana kadar bekle
+          for i in {1..30}; do
+            mariadb -h 127.0.0.1 -P 3306 -uroot -proot -e "SELECT 1" && break
+            echo "Waiting for MariaDB..."
+            sleep 2
+          done
+          mariadb -h 127.0.0.1 -P 3306 -uroot -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
+          mariadb -h 127.0.0.1 -P 3306 -uroot -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
 
-       - name: Run Tests
-         working-directory: /home/runner/frappe-bench
-         run: |
-           bench --site test_site set-config allow_tests true
-           bench --site test_site run-tests --app qr_scanner
-         env:
-           TYPE: server
+      - name: Install app to test site
+        working-directory: /home/runner/frappe-bench
+        env:
+          CI: 'Yes'
+        run: |
+          bench get-app qr_scanner $GITHUB_WORKSPACE
+          bench setup requirements --dev
+          bench new-site --db-root-password root --admin-password admin test_site
+          bench --site test_site install-app qr_scanner
+          bench build
+
+      - name: Run Tests
+        working-directory: /home/runner/frappe-bench
+        env:
+          TYPE: server
+        run: |
+          bench --site test_site set-config allow_tests true
+          bench --site test_site run-tests --app qr_scanner
