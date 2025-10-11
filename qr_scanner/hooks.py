@@ -9,7 +9,10 @@ app_license = "mit"
 # ------------------
 
 # required_apps = []
-
+fixtures = [
+    {"doctype": "Workspace", "filters": [["module", "=", "QR Scanner"]]},
+    {"doctype": "Page", "filters": [["module", "=", "QR Scanner"]]}
+]
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
 # 	{
