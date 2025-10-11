@@ -1,6 +1,7 @@
 {
   "doctype": "Workspace",
   "name": "QR Scanner",
+  "title": "QR Scanner",
   "label": "QR Scanner",
   "module": "QR Scanner",
   "sequence_id": 1,
