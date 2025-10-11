@@ -14,23 +14,6 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
           <input id="manual" type="text" class="form-control"
                  placeholder="USB tarayıcıyla okutun veya elle yazıp Enter'a basın" autofocus />
         </div>
-
-        <div class="row g-2 align-items-end">
-          <div class="col-sm-6">
-            <label class="form-label">Kamera Cihazı</label>
-            <select id="cameraSelect" class="form-select"></select>
-          </div>
-          <div class="col-sm-6">
-            <button id="startBtn" class="btn btn-primary">Kamerayı Başlat</button>
-            <button id="stopBtn"  class="btn btn-secondary" disabled>Dur</button>
-          </div>
-        </div>
-
-        <div>
-          <video id="video" playsinline autoplay style="width:100%;max-height:55vh;border-radius:8px;background:#000"></video>
-          <canvas id="canvas" style="display:none"></canvas>
-        </div>
-
         <div id="status" class="text-muted">Hazır</div>
       </div>
     </div>
