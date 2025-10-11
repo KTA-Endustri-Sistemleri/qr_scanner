@@ -4,6 +4,7 @@
   "module": "QR Scanner",
   "title": "QR Scanner",
   "standard": 1,
-  "restrict_to_domain": null,
-  "roles": [{"Role":"System Manager"}]
+  "roles": [
+    { "role": "System Manager" }
+  ]
 }
