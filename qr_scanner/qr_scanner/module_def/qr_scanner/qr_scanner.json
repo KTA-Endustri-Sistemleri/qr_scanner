@@ -3,6 +3,6 @@
   "name": "QR Scanner",
   "module_name": "QR Scanner",
   "app_name": "qr_scanner",
-  "custom": 1,
+  "custom": 0,
   "system_module": 0
 }
