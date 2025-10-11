@@ -82,7 +82,8 @@ app_license = "mit"
 # ------------
 
 # before_install = "qr_scanner.install.before_install"
-# after_install = "qr_scanner.install.after_install"
+after_install = "qr_scanner.install.after_install"
+after_migrate = "qr_scanner.install.after_migrate"
 
 # Uninstallation
 # ------------
