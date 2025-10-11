@@ -1,8 +1,0 @@
-{
-  "doctype": "Page",
-  "name": "qr_scan",
-  "module": "QR Scanner",
-  "title": "QR Scan",
-  "standard": 1,
-  "roles": [{"role": "System Manager"}]
-}
