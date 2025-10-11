@@ -1,0 +1,44 @@
+{
+  "doctype": "Workspace",
+  "name": "QR Scanner",
+  "label": "QR Scanner",
+  "module": "QR Scanner",
+  "sequence_id": 1,
+  "public": 1,
+  "is_hidden": 0,
+  "hide_custom": 0,
+  "roles": [
+    { "role": "System Manager" }
+  ],
+  "shortcuts": [
+    {
+      "doctype": "Workspace Shortcut",
+      "type": "Page",
+      "label": "QR Scan",
+      "link_to": "qr-scan",
+      "icon": "octicon octicon-device-camera"
+    },
+    {
+      "doctype": "Workspace Shortcut",
+      "type": "DocType",
+      "label": "QR Scan Records",
+      "link_to": "QR Scan Record",
+      "icon": "octicon octicon-list-unordered"
+    }
+  ],
+  "links": [
+    {
+      "doctype": "Workspace Link",
+      "type": "DocType",
+      "label": "QR Scan Record",
+      "link_to": "QR Scan Record",
+      "icon": "octicon octicon-list-unordered"
+    }
+  ],
+  "charts": [],
+  "cards": [],
+  "number_cards": [],
+  "dashboard_charts": [],
+  "onboarding": "",
+  "content": ""
+}
