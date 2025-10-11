@@ -1,0 +1,1 @@
+# keep it minimal; route /app/qr-scanner

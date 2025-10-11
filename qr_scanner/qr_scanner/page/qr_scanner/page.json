@@ -1,0 +1,7 @@
+{
+  "doctype": "Page",
+  "name": "qr-scanner",
+  "title": "QR Scanner",
+  "module": "QR Scanner",
+  "standard": "Yes"
+}
