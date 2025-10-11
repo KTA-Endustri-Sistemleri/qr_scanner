@@ -1,1 +1,1 @@
-qr_scanner
+QR Scanner
