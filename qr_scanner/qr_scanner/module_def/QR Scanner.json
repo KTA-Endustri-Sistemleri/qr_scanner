@@ -1,0 +1,8 @@
+{
+  "doctype": "Module Def",
+  "name": "QR Scanner",
+  "module_name": "QR Scanner",
+  "app_name": "qr_scanner",
+  "custom": 1,
+  "system_module": 0
+}
