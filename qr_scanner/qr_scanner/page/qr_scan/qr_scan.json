@@ -1,0 +1,23 @@
+{
+ "content": null,
+ "creation": "2025-10-11 04:23:39.296144",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2025-10-11 04:42:34.169621",
+ "modified_by": "Administrator",
+ "module": "QR Scanner",
+ "name": "qr-scan",
+ "owner": "Administrator",
+ "page_name": "qr-scan",
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "QR Scan"
+}
