@@ -5,10 +5,11 @@ frappe.pages['qr-scan'] = {
       title: 'QR Scan',
       single_column: true
     });
+
     page.main.innerHTML = `
-      <div style="padding:12px">
-        <h2 style="margin:0 0 8px">Merhaba 👋</h2>
-        <div>Bu metni görüyorsan Page JS yüklendi.</div>
+      <div style="padding:20px; text-align:center;">
+        <h2>Merhaba 👋</h2>
+        <p>Bu metni görüyorsan QR Scan sayfan başarıyla çalışıyor.</p>
       </div>
     `;
   }
