@@ -1,10 +1,10 @@
 # 📦 QR Scanner (ERPNext v15.81.1)
 
-Test cihazından gelen QR etiketlerini **USB barkod okuyucu** ⌨️ ile tarayıp ERPNext’e kaydeder. **Duplicate** kayıtları 🚫 otomatik engeller.
+Scans QR labels from a **USB barcode scanner** ⌨️ and records them in ERPNext. Automatically blocks **duplicate** entries 🚫.
 
 ---
 
-## 🧰 Kurulum
+## 🧰 Installation
 ```bash
 cd ~/frappe-bench
 bench get-app qr_scanner https://github.com/KTA-Endustri-Sistemleri/qr_scanner.git
@@ -15,44 +15,42 @@ bench build && bench restart
 
 ---
 
-## ▶️ Kullanım
-- Desk’te **QR Scanner** sayfasını açın: `https://your.site/app/qr-scanner`  
-- **USB tarayıcı** ile okutun.  
-- Sonuçlar **toast** bildirimleriyle görünür:  
-  - ✅ **Başarılı** → yeşil, 1–2 sn sonra kendiliğinden kapanır.  
-  - 🔁 **Duplicate** → kırmızı, kullanıcı kapatana kadar kalır.
+## ▶️ Usage
+- Open the **QR Scanner** page in Desk: `https://your.site/app/qr-scanner`  
+- Scan with a **USB scanner**.  
+- Results appear via **toast** notifications:  
+  - ✅ **Success** → green, auto-closes after 1–2 seconds.  
+  - 🔁 **Duplicate** → red, stays until the user closes it.
 
-> 💡 **İpucu:** USB tarayıcı odak kaybederse alan otomatik yeniden odaklanır. Hızlı taramalarda aynı kod kısa aralıkla tekrarlandıysa yazılım bunu yoksayar (debounce).
-
----
-
-## 🔐 İzinler
-- Sayfa ve API, varsayılan olarak **System Manager** (ve isterseniz `QR Scanner User`) rolü ile sınırlandırılabilir.
-- Doctype ve endpoint izinlerini ihtiyacınıza göre düzenleyin.
+> 💡 **Tip:** If the USB scanner loses focus, the input will auto-refocus. For rapid scans, repeated reads of the same code within a short interval are ignored (debounce).
 
 ---
 
-## 🧪 Duplicate Davranışı
-- Sunucu tarafında duplicate kontrolü yapılır; duplicate olan barkod **yeniden kaydedilmez**.  
-- Eşzamanlı taramalar için veritabanında `qr_code` alanında **UNIQUE index** önerilir (veri bütünlüğü için).
+## 🔐 Permissions
+- The page and API can be restricted to **System Manager** by default (and optionally `QR Scanner User`).  
+- Adjust Doctype and endpoint permissions per your needs.
 
 ---
 
-## 🧩 Hızlı Sorun Giderme
-- 🖥️ **Sayfa görünmüyor:** `reload-doc` → `bench --site your.site reload-doc "QR Scanner" page qr_scanner`  
-- 🔑 **Yetki hatası:** Rol atamalarını kontrol edin (System Manager / QR Scanner User).   
-- 🔁 **Duplicate beklediğim gibi değil:** `qr_code` alanında UNIQUE index ve API’de race-safe insert olduğundan emin olun.
+## 🧪 Duplicate Behavior
+- The server performs a duplicate check; a duplicate QR code is **not saved** again.  
+- For concurrent scans, a **UNIQUE index** on the `qr_code` field is recommended to ensure data integrity.
 
 ---
 
-## 🗺️ Feature Olarak Eklenecekler (Roadmap)
+## 🧩 Quick Troubleshooting
+- 🖥️ **Page not visible:** `reload-doc` → `bench --site your.site reload-doc "QR Scanner" page qr_scanner`  
+- 🔑 **Permission error:** Verify role assignments (System Manager / QR Scanner User).  
+- 🔁 **Duplicate not working as expected:** Ensure a UNIQUE index on `qr_code` and race-safe inserts in the API.
+
+---
+
+## 🗺️ Planned Features (Roadmap)
 1. **⚙️ QR Scanner Settings (Single DocType)**  
-   Panelden yönetilecek ayarlar:  
+   Manage settings from the UI:  
    `success_toast_ms`, `duplicate_sticky`, `beep_enabled`, `vibrate_enabled`, `debounce_ms`, `autofocus_back`.  
-   **API:** `qr_scanner.api.get_client_settings` ile JS varsayılanlarını server tarafından override edeceğiz.
+   **API:** `qr_scanner.api.get_client_settings` will override JS defaults from the server.
 
-2. **⚡ Enter’sız Otomatik Gönderim (USB “burst” algılama)**  
-   Barkod okuyucudan gelen hızlı tuş vuruşlarını algılayıp kısa bir **sessizlikte** otomatik gönderim.  
-   Ayarlanabilir eşikler: `silence_ms`, `min_len`, `burst_threshold_ms`, `burst_min_keys` (tercihen Settings üzerinden).
-
----
+2. **⚡ Auto-Submit Without Enter (USB “burst” detection)**  
+   Detects rapid key bursts from the scanner and auto-submits after a short **silence**.  
+   Configurable thresholds: `silence_ms`, `min_len`, `burst_threshold_ms`, `burst_min_keys` (preferably via Settings).
