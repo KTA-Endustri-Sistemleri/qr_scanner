@@ -1,4 +1,4 @@
-// QR Scanner Desk Page – USB + Camera
+// QR Scanner Desk Page – USB only + görsel toast bildirimleri
 frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   const page = frappe.ui.make_app_page({
     parent: wrapper,
@@ -6,218 +6,132 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     single_column: true
   });
 
+  // Minimal ama şık arayüz
   $(page.body).html(`
-    <div class="p-4">
-      <div class="grid" style="grid-template-columns: 1fr; gap: 12px;">
-        <div>
-          <label class="form-label">USB / Klavye Wedge</label>
-          <input id="manual" type="text" class="form-control"
-                 placeholder="USB tarayıcıyla okutun veya elle yazıp Enter'a basın" autofocus />
-        </div>
-        <div id="status" class="text-muted">Hazır</div>
-      </div>
+    <style>
+      .qr-wrap { max-width: 680px; margin: 24px auto; }
+      .qr-title { font-weight: 600; font-size: 1.1rem; margin-bottom: 8px; }
+      .qr-input { font-size: 1.25rem; padding: 14px 16px; height: auto; }
+      .qr-help { color: #6c757d; margin-top: 8px; }
+      /* Toast container */
+      .qr-toast-container {
+        position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+        z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center;
+        pointer-events: none; /* tıklamalar toasta, close butonunda etkinleştiriyoruz */
+      }
+      .qr-toast {
+        min-width: 280px; max-width: 90vw;
+        border-radius: 10px; padding: 12px 14px; color: #fff;
+        box-shadow: 0 8px 30px rgba(0,0,0,.18);
+        display: flex; align-items: center; gap: 10px;
+        pointer-events: auto; /* close butonu çalışsın */
+      }
+      .qr-toast-success { background: #28a745; } /* yeşil */
+      .qr-toast-error   { background: #dc3545; } /* kırmızı */
+      .qr-toast .qr-close {
+        margin-left: 8px; border: none; background: rgba(255,255,255,.2);
+        color: #fff; border-radius: 6px; padding: 2px 8px; cursor: pointer;
+      }
+    </style>
+
+    <div class="qr-wrap card p-4">
+      <div class="qr-title">USB / Klavye Wedge</div>
+      <input id="manual" type="text" class="form-control qr-input"
+             placeholder="USB tarayıcıyla okutun veya elle yazıp Enter'a basın" autofocus />
+      <div class="qr-help">Başarılı kayıtlar yeşil; yineleyen barkodlar kırmızı uyarı ile görünür.</div>
     </div>
+
+    <div id="qrToastContainer" class="qr-toast-container" aria-live="polite" aria-atomic="true"></div>
   `);
 
-  const $body = $(page.body);
-  const manual = $body.find('#manual')[0];
-  const statusEl = $body.find('#status')[0];
-  const video = $body.find('#video')[0];
-  const canvas = $body.find('#canvas')[0];
-  const cameraSelect = $body.find('#cameraSelect')[0];
-  const startBtn = $body.find('#startBtn')[0];
-  const stopBtn  = $body.find('#stopBtn')[0];
+  const manual   = document.getElementById('manual');
+  const toastsEl = document.getElementById('qrToastContainer');
 
-  let stream = null;
-  let scanning = false;
-  let rafId = null;
-  let lastCode = '';
-  let lastTime = 0;
-  let useBarcodeDetector = false;
-  let jsQRReady = false;
+  // --- Toast yardımcıları ---
+  function showToast({ type = 'success', message = '', autoclose = true, ms = 1500 }) {
+    if (!toastsEl) return;
+    const toast = document.createElement('div');
+    toast.className = `qr-toast ${type === 'success' ? 'qr-toast-success' : 'qr-toast-error'}`;
+    toast.innerHTML = `
+      <div style="flex:1">${frappe.utils.escape_html(message)}</div>
+      <button class="qr-close" ${autoclose ? 'style="display:none"' : ''}>Kapat</button>
+    `;
+    toastsEl.appendChild(toast);
 
-  function setStatus(msg) {
-    if (statusEl) statusEl.textContent = msg;
+    // Auto dismiss (başarılı kayıt)
+    let timer = null;
+    if (autoclose) {
+      timer = setTimeout(() => removeToast(), ms);
+    }
+
+    // Manuel kapatma (duplicate)
+    const closeBtn = toast.querySelector('.qr-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', removeToast);
+    }
+
+    function removeToast() {
+      if (timer) clearTimeout(timer);
+      if (toast && toast.parentNode) {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity .2s ease';
+        setTimeout(() => toast.parentNode.removeChild(toast), 180);
+      }
+    }
+
+    return { remove: removeToast };
   }
 
-  // ---- SERVER CALL
-  function onScanned(code, source) {
-    // Debounce (aynı kodu 1200ms içinde tekrar gönderme)
+  // (opsiyonel) ses & titreşim geri bildirimi
+  function beep(freq=880, ms=110) {
+    try {
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq; gain.gain.value = 0.06;
+      osc.start(); setTimeout(() => { osc.stop(); ctx.close(); }, ms);
+    } catch (e) {}
+  }
+  function vibrate(ms=60) { if (navigator.vibrate) navigator.vibrate(ms); }
+
+  // --- Sunucu çağrısı ---
+  let lastCode = '', lastTime = 0;
+  function onScanned(code) {
     const now = Date.now();
-    if (code === lastCode && (now - lastTime) < 1200) return;
+    // Kısa debounce: aynı kod 800ms içinde tekrar gelirse yoksay
+    if (code === lastCode && (now - lastTime) < 800) return;
     lastCode = code; lastTime = now;
 
-    setStatus('Okundu: ' + code);
     frappe.call({
       method: 'qr_scanner.api.create_scan',
-      args: { qr_code: code, scanned_via: source }
+      args: { qr_code: code, scanned_via: 'USB Scanner' }
     }).then(r => {
       const m = r.message || {};
-      if (m.created) setStatus('Kayıt edildi: ' + m.name);
-      else if (m.reason === 'duplicate') setStatus('Duplicate: daha önce okutulmuş.');
-      else setStatus('İşlem: ' + JSON.stringify(m));
-    }).catch(() => setStatus('Sunucu hatası'));
+      if (m.created) {
+        showToast({ type: 'success', message: `Kayıt edildi: ${m.name}`, autoclose: true, ms: 1800 });
+        beep(900, 120); vibrate(50);
+      } else if (m.reason === 'duplicate') {
+        showToast({ type: 'error', message: 'Duplicate: bu barkod daha önce okutulmuş.', autoclose: false });
+        beep(220, 180); vibrate(120);
+      } else {
+        showToast({ type: 'error', message: 'İşlem tamamlanamadı.', autoclose: false });
+      }
+    }).catch(() => {
+      showToast({ type: 'error', message: 'Sunucu hatası. Lütfen tekrar deneyin.', autoclose: false });
+    });
   }
 
-  // ---- USB / Keyboard wedge
+  // --- USB / keyboard wedge
   if (manual) {
     manual.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const val = manual.value.trim();
-        if (val) onScanned(val, 'USB Scanner');
+        if (val) onScanned(val);
         manual.value = '';
       }
     });
+    // odağa kaçarsa geri al
+    manual.addEventListener('blur', () => setTimeout(() => manual.focus(), 50));
+    manual.focus();
   }
-
-  // ---- Camera helpers
-  async function listCameras() {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videos = devices.filter(d => d.kind === 'videoinput');
-      cameraSelect.innerHTML = '';
-      videos.forEach((d, i) => {
-        const opt = document.createElement('option');
-        opt.value = d.deviceId;
-        opt.textContent = d.label || `Kamera ${i+1}`;
-        cameraSelect.appendChild(opt);
-      });
-
-      // Arka kamera varsa onu seç
-      const back = videos.find(d => /back|arka|environment/i.test(d.label));
-      if (back) cameraSelect.value = back.deviceId;
-    } catch (err) {
-      setStatus('Kamera listelenemedi: ' + err);
-    }
-  }
-
-  async function startCamera() {
-    try {
-      await stopCamera();
-
-      const deviceId = cameraSelect.value || undefined;
-      const constraints = deviceId
-        ? { video: { deviceId: { exact: deviceId } } }
-        : { video: { facingMode: { ideal: 'environment' } } };
-
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = stream;
-      await video.play();
-
-      // BarcodeDetector destekli mi?
-      useBarcodeDetector = (window.BarcodeDetector && BarcodeDetector.getSupportedFormats)
-        ? (await BarcodeDetector.getSupportedFormats()).includes('qr_code')
-        : false;
-
-      if (!useBarcodeDetector) {
-        // jsQR'yi dinamik yükle
-        await ensureJsQR();
-      }
-
-      scanning = true;
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-      setStatus(useBarcodeDetector ? 'Kamera açık (BarcodeDetector)' : 'Kamera açık (jsQR)');
-
-      tick();
-    } catch (err) {
-      setStatus('Kamera açılamadı: ' + err);
-    }
-  }
-
-  async function stopCamera() {
-    scanning = false;
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
-
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-    }
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-  }
-
-  function tick() {
-    if (!scanning) return;
-
-    if (useBarcodeDetector) {
-      detectWithBarcodeDetector();
-    } else {
-      detectWithJsQR();
-    }
-  }
-
-  async function detectWithBarcodeDetector() {
-    try {
-      const detector = new BarcodeDetector({ formats: ['qr_code'] });
-      const scan = async () => {
-        if (!scanning) return;
-        const barcodes = await detector.detect(video);
-        if (barcodes && barcodes.length) {
-          const code = (barcodes[0].rawValue || '').trim();
-          if (code) onScanned(code, 'Mobile Camera');
-        }
-        rafId = requestAnimationFrame(scan);
-      };
-      rafId = requestAnimationFrame(scan);
-    } catch (err) {
-      setStatus('BarcodeDetector hatası, jsQR’ye düşülüyor: ' + err);
-      useBarcodeDetector = false;
-      detectWithJsQR();
-    }
-  }
-
-  function detectWithJsQR() {
-    if (!jsQRReady) {
-      setStatus('jsQR yükleniyor…');
-      // jsQR yüklenememişse bekle, sonra tekrar dene
-      rafId = requestAnimationFrame(detectWithJsQR);
-      return;
-    }
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const W = Math.min(640, video.videoWidth || 640);
-    const H = Math.floor(W * (video.videoHeight ? video.videoHeight / video.videoWidth : 3/4));
-    canvas.width = W; canvas.height = H;
-
-    const loop = () => {
-      if (!scanning) return;
-      try {
-        ctx.drawImage(video, 0, 0, W, H);
-        const imgData = ctx.getImageData(0, 0, W, H);
-        const result = window.jsQR && window.jsQR(imgData.data, W, H, { inversionAttempts: 'dontInvert' });
-        if (result && result.data) {
-          const code = (result.data || '').trim();
-          if (code) onScanned(code, 'Mobile Camera');
-        }
-      } catch (e) {
-        // çerçeve çizimi sırasında hata olabilir; yoksay ve devam et
-      }
-      rafId = requestAnimationFrame(loop);
-    };
-    rafId = requestAnimationFrame(loop);
-  }
-
-  function ensureJsQR() {
-    return new Promise((resolve, reject) => {
-      if (window.jsQR) { jsQRReady = true; return resolve(); }
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
-      s.onload = () => { jsQRReady = true; resolve(); };
-      s.onerror = (e) => reject(e);
-      document.head.appendChild(s);
-    });
-  }
-
-  // UI events
-  startBtn.addEventListener('click', startCamera);
-  stopBtn.addEventListener('click', stopCamera);
-
-  // load cameras on entry
-  if (navigator.mediaDevices?.enumerateDevices) listCameras();
-
-  // cleanup on leave
-  wrapper.addEventListener('page-change', stopCamera);
-  window.addEventListener('beforeunload', stopCamera);
 };
