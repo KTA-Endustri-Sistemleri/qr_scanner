@@ -138,8 +138,6 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }
     lockErr.style.display = 'none';
     lockEl.classList.add('show');
-    // Görsel boşlukları minimize etmek istersen localStorage ile de tutabilirsin:
-    // localStorage.setItem('qr_scanner_locked', '1');
     setTimeout(() => lockInput.focus(), 50);
   }
   function releaseLock() {
@@ -150,7 +148,6 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       manual.value = '';
       setTimeout(() => manual.focus(), 30);
     }
-    // localStorage.removeItem('qr_scanner_locked');
   }
 
   // Sayfa yüklenince sunucudan kilit durumunu sor
@@ -159,11 +156,14 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       const s = r.message || {};
       if (s.locked) {
         engageLock(s.reason || 'error');
+      } else {
+        // server kilitli değilse UI da açık kalsın
+        releaseLock();
       }
     })
     .catch(() => {/* sessiz geç */});
 
-  // Duplicate/Error tetiklerinde önce sunucuda kilitle, sonra UI'ı kilitle
+  // Duplicate tetiklerinde sunucuda kilit + UI, error’da sadece UI
   function lockAndEngage(reason) {
     frappe.call({
       method: 'qr_scanner.api.set_lock',
@@ -228,11 +228,12 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       args: { qr_code: code, scanned_via: 'USB Scanner' }
     }).then(r => {
       const m = r.message || {};
+      // console.debug('[QR] create_scan response:', m);
       if (m.created) {
         showSuccessToast(`Kayıt edildi: ${m.name}`, 1800);
         beep(900, 120); vibrate(50);
       } else if (m.reason === 'duplicate') {
-        // Sunucuda da kilitle
+        // duplicate: sunucuda kilitle + UI
         lockAndEngage('duplicate');
         beep(220, 180); vibrate(120);
       } else if (m.reason === 'locked') {
@@ -240,12 +241,13 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         engageLock('error');
         beep(220, 180); vibrate(120);
       } else {
-        // Genel hata
-        lockAndEngage('error');
+        // Genel hata: sadece UI kilidi (server'a lock yazma)
+        engageLock('error');
         beep(220, 180); vibrate(120);
       }
     }).catch(() => {
-      lockAndEngage('error');
+      // Ağ/parse hatası: sadece UI kilidi
+      engageLock('error');
       beep(220, 180); vibrate(120);
     });
   }
