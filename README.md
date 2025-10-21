@@ -11,6 +11,7 @@ bench get-app qr_scanner https://github.com/KTA-Endustri-Sistemleri/qr_scanner.g
 bench --site your.site install-app qr_scanner
 bench --site your.site migrate
 bench build && bench restart
+bench set-config -g qr_scanner_unlock_password "changeit"
 ```
 
 ---
