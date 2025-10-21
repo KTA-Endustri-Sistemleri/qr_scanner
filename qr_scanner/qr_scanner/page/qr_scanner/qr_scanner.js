@@ -1,4 +1,4 @@
-// QR Scanner Desk Page – USB only + Fullscreen Red Lock with server-persisted state
+// QR Scanner – USB only + Fullscreen Red Lock (client-side, no server lock)
 frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   const page = frappe.ui.make_app_page({
     parent: wrapper,
@@ -15,9 +15,8 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
 
       /* --- FULLSCREEN LOCK --- */
       .qr-lock {
-        position: fixed; inset: 0; background: #dc3545; /* kırmızı */
-        z-index: 10000; display: none; /* kilitlenince block yapılır */
-        color: #fff;
+        position: fixed; inset: 0; background: #dc3545;
+        z-index: 10000; display: none; color: #fff;
       }
       .qr-lock.show { display: flex; }
       .qr-lock-inner {
@@ -49,7 +48,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         80% { transform: translateX(4px); }
       }
 
-      /* Success toast (sadece başarılı kayıtlarda) */
+      /* Success toast */
       .qr-toast-container {
         position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
         z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center;
@@ -59,27 +58,24 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         min-width: 280px; max-width: 90vw;
         border-radius: 10px; padding: 12px 14px; color: #fff;
         box-shadow: 0 8px 30px rgba(0,0,0,.18);
-        display: flex; align-items: center; gap: 10px;
-        pointer-events: auto;
+        display: flex; align-items: center; gap: 10px; pointer-events: auto;
       }
       .qr-toast-success { background: #28a745; }
-      .qr-toast .qr-close { display:none; }
     </style>
 
     <div class="qr-wrap card p-4">
       <div class="qr-title">USB / Klavye Wedge</div>
       <input id="manual" type="text" class="form-control qr-input"
              placeholder="USB tarayıcıyla okutun veya elle yazıp Enter'a basın" autofocus />
-      <div class="qr-help">Başarılı kayıtlar yeşil toast; hata/duplicate durumunda ekran kilitlenir.</div>
+      <div class="qr-help">Başarılı kayıtlar yeşil toast; duplicate olursa parola istenir (yerel kilit).</div>
     </div>
 
     <div id="qrToastContainer" class="qr-toast-container" aria-live="polite" aria-atomic="true"></div>
 
-    <!-- FULLSCREEN LOCK -->
     <div id="qrLock" class="qr-lock" role="dialog" aria-modal="true" aria-labelledby="qrLockTitle">
       <div class="qr-lock-inner">
         <div id="qrLockTitle" class="qr-lock-title">Erişim Kilitli</div>
-        <div id="qrLockDesc" class="qr-lock-desc">Hata veya yinelenen barkod algılandı. Devam etmek için yönetici parolasını girin.</div>
+        <div id="qrLockDesc" class="qr-lock-desc">Yinelenen barkod algılandı. Devam etmek için yönetici parolasını girin.</div>
         <form id="qrLockForm" class="qr-lock-form" autocomplete="off">
           <input id="qrLockInput" class="qr-lock-input" type="password" placeholder="Yönetici parolası" />
           <button id="qrLockBtn" class="qr-lock-btn" type="submit">Kilidi Aç</button>
@@ -92,11 +88,10 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   const manual    = document.getElementById('manual');
   const toastsEl  = document.getElementById('qrToastContainer');
 
-  /* -------- Toast (sadece success için) -------- */
   function showSuccessToast(message = '', ms = 1500) {
     if (!toastsEl) return;
     const toast = document.createElement('div');
-    toast.className = `qr-toast qr-toast-success`;
+    toast.className = 'qr-toast qr-toast-success';
     toast.innerHTML = `<div style="flex:1">${frappe.utils.escape_html(message)}</div>`;
     toastsEl.appendChild(toast);
     setTimeout(() => {
@@ -106,7 +101,6 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }, ms);
   }
 
-  /* -------- Ses & titreşim (opsiyonel) -------- */
   function beep(freq=880, ms=110) {
     try {
       const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -118,26 +112,26 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   }
   function vibrate(ms=60) { if (navigator.vibrate) navigator.vibrate(ms); }
 
-  /* -------- FULLSCREEN LOCK yardımcıları -------- */
+  // --- FULLSCREEN LOCK (client-side) ---
   const lockEl    = document.getElementById('qrLock');
   const lockForm  = document.getElementById('qrLockForm');
   const lockInput = document.getElementById('qrLockInput');
   const lockBtn   = document.getElementById('qrLockBtn');
   const lockErr   = document.getElementById('qrLockError');
   const lockDesc  = document.getElementById('qrLockDesc');
-
   let isLocked = false;
 
-  function engageLock(reason = 'error') {
+  function engageLock(reason='duplicate') {
     isLocked = true;
     if (manual) manual.setAttribute('disabled', 'disabled');
     if (lockDesc) {
       lockDesc.textContent = (reason === 'duplicate')
         ? 'Yinelenen barkod algılandı. Devam etmek için yönetici parolasını girin.'
-        : 'Hata oluştu. Devam etmek için yönetici parolasını girin.';
+        : 'Devam etmek için yönetici parolasını girin.';
     }
     lockErr.style.display = 'none';
     lockEl.classList.add('show');
+    try { localStorage.setItem('qr_lock', reason || 'duplicate'); } catch (e) {}
     setTimeout(() => lockInput.focus(), 50);
   }
   function releaseLock() {
@@ -148,35 +142,16 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       manual.value = '';
       setTimeout(() => manual.focus(), 30);
     }
+    try { localStorage.removeItem('qr_lock'); } catch (e) {}
   }
 
-  // Sayfa yüklenince sunucudan kilit durumunu sor
-  frappe.call({ method: 'qr_scanner.api.get_lock_state' })
-    .then(r => {
-      const s = r.message || {};
-      if (s.locked) {
-        engageLock(s.reason || 'error');
-      } else {
-        releaseLock();
-      }
-    })
-    .catch(() => { /* sessiz geç */ });
+  // Sayfa yüklenince localStorage'a göre kilidi devam ettir
+  try {
+    const ls = localStorage.getItem('qr_lock');
+    if (ls) engageLock(ls);
+  } catch (e) {}
 
-  // Duplicate tetiklerinde sunucuda kilit + UI, error’da sadece UI
-  function lockAndEngage(reason) {
-    const p = frappe.call({
-      method: 'qr_scanner.api.set_lock',
-      args: { reason: reason || 'error' }
-    });
-    if (p && typeof p.always === 'function') {
-      p.always(() => engageLock(reason || 'error'));
-    } else if (p && typeof p.finally === 'function') {
-      p.finally(() => engageLock(reason || 'error'));
-    } else {
-      p.then(() => engageLock(reason || 'error')).catch(() => engageLock(reason || 'error'));
-    }
-  }
-
+  // Parola formu
   lockForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const pw = (lockInput.value || '').trim();
@@ -187,7 +162,6 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }
     lockBtn.setAttribute('disabled', 'disabled');
 
-    // Parolayı sunucuda doğrula (server başarıda clear_lock yapıyor)
     const req = frappe.call({
       method: 'qr_scanner.api.verify_unlock_password',
       args: { password: pw }
@@ -196,11 +170,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     req.then(r => {
       const m = r.message || {};
       if (m.ok) {
-        // ekstra emniyet: clear_lock tekrar
-        const c = frappe.call({ method: 'qr_scanner.api.clear_lock' });
-        if (c && typeof c.always === 'function') c.always(() => releaseLock());
-        else if (c && typeof c.finally === 'function') c.finally(() => releaseLock());
-        else c.then(() => releaseLock()).catch(() => releaseLock());
+        releaseLock();
         beep(880, 120); vibrate(50);
       } else {
         lockErr.textContent = (m.reason === 'not_configured')
@@ -249,28 +219,23 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         showSuccessToast(`Kayıt edildi: ${m.name}`, 1800);
         beep(900, 120); vibrate(50);
       } else if (m.reason === 'duplicate') {
-        // duplicate: sunucuda kilitle + UI
-        lockAndEngage('duplicate');
-        beep(220, 180); vibrate(120);
-      } else if (m.reason === 'locked') {
-        // Sunucu zaten kilitli diyorsa UI'ı da kilitle
-        engageLock('error');
+        // yalnızca UI kilidi (server-side lock yok)
+        engageLock('duplicate');
         beep(220, 180); vibrate(120);
       } else {
-        // Genel hata: sadece UI kilidi (server'a lock yazma)
-        engageLock('error');
+        // istersen kilit yerine uyarı ver
+        frappe.show_alert({ message: 'İşlem tamamlanamadı.', indicator: 'red' });
         beep(220, 180); vibrate(120);
       }
     }).catch(() => {
-      // Ağ/parse hatası: sadece UI kilidi
-      engageLock('error');
+      frappe.show_alert({ message: 'Sunucuya ulaşılamadı.', indicator: 'red' });
       beep(220, 180); vibrate(120);
     });
   }
 
   if (manual) {
     manual.addEventListener('keydown', (e) => {
-      if (isLocked) return; // kilitliyken hiçbir şey yapma
+      if (isLocked) return;
       if (e.key === 'Enter') {
         const val = manual.value.trim();
         if (val) onScanned(val);
