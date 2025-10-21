@@ -5,6 +5,8 @@
   "title": "QR Scanner",
   "standard": 1,
   "roles": [
-    { "role": "System Manager" }
+    { "role": "System Manager" },
+    { "role": "QR Scanner User" },
+    { "role": "QR Scanner Manager" }
   ]
 }
