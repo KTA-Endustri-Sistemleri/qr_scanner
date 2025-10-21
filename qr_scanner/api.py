@@ -1,4 +1,3 @@
-# apps/qr_scanner/qr_scanner/api.py
 import hmac
 import frappe
 from frappe import _
@@ -14,7 +13,7 @@ def verify_unlock_password(password):
         return {"ok": bool(ok)}
     except Exception:
         frappe.log_error("verify_unlock_password failed", "qr_scanner")
-        return {"ok": False}
+        return {"ok": False, "msg": "verify_unlock_password failed"}
 
 @frappe.whitelist()
 def create_scan(qr_code, scanned_via="USB Scanner", device_id=None):
@@ -40,6 +39,7 @@ def create_scan(qr_code, scanned_via="USB Scanner", device_id=None):
         doc.insert(ignore_permissions=True)
         frappe.db.commit()
         return {"ok": True, "created": True, "name": doc.name}
-    except Exception:
+    except Exception as e:
         frappe.log_error(frappe.get_traceback(), "QR Scanner: create_scan failed")
-        return {"ok": False, "created": False, "reason": "error"}
+        # istemciye teşhis için kısa mesaj ver
+        return {"ok": False, "created": False, "reason": "error", "msg": str(e)}

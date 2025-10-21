@@ -13,53 +13,22 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       .qr-input { font-size: 1.25rem; padding: 14px 16px; height: auto; }
       .qr-help { color: #6c757d; margin-top: 8px; }
 
-      /* --- FULLSCREEN LOCK --- */
-      .qr-lock {
-        position: fixed; inset: 0; background: #dc3545;
-        z-index: 10000; display: none; color: #fff;
-      }
+      .qr-lock { position: fixed; inset: 0; background: #dc3545; z-index: 10000; display: none; color: #fff; }
       .qr-lock.show { display: flex; }
-      .qr-lock-inner {
-        margin: auto; width: min(560px, 90vw);
-        background: rgba(0,0,0,0.18);
-        border-radius: 14px; padding: 20px;
-        box-shadow: 0 12px 40px rgba(0,0,0,.35);
-        backdrop-filter: blur(2px);
-      }
+      .qr-lock-inner { margin: auto; width: min(560px, 90vw); background: rgba(0,0,0,0.18);
+        border-radius: 14px; padding: 20px; box-shadow: 0 12px 40px rgba(0,0,0,.35); backdrop-filter: blur(2px); }
       .qr-lock-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 6px; }
       .qr-lock-desc { opacity: .9; margin-bottom: 14px; }
       .qr-lock-form { display: flex; gap: 8px; }
-      .qr-lock-input {
-        flex: 1; padding: 12px 14px; border-radius: 10px; border: none; outline: none;
-        font-size: 1.1rem;
-      }
-      .qr-lock-btn {
-        padding: 12px 16px; border-radius: 10px; border: none; cursor: pointer;
-        font-weight: 600;
-      }
+      .qr-lock-input { flex: 1; padding: 12px 14px; border-radius: 10px; border: none; outline: none; font-size: 1.1rem; }
+      .qr-lock-btn { padding: 12px 16px; border-radius: 10px; border: none; cursor: pointer; font-weight: 600; }
       .qr-lock-btn:disabled { opacity: .6; cursor: not-allowed; }
       .qr-lock-error { margin-top: 10px; font-weight: 600; display: none; }
       .qr-shake { animation: qrshake .28s linear 1; }
-      @keyframes qrshake {
-        0%,100% { transform: translateX(0); }
-        20% { transform: translateX(-6px); }
-        40% { transform: translateX(6px); }
-        60% { transform: translateX(-4px); }
-        80% { transform: translateX(4px); }
-      }
+      @keyframes qrshake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
 
-      /* Success toast */
-      .qr-toast-container {
-        position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-        z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center;
-        pointer-events: none;
-      }
-      .qr-toast {
-        min-width: 280px; max-width: 90vw;
-        border-radius: 10px; padding: 12px 14px; color: #fff;
-        box-shadow: 0 8px 30px rgba(0,0,0,.18);
-        display: flex; align-items: center; gap: 10px; pointer-events: auto;
-      }
+      .qr-toast-container { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center; pointer-events: none; }
+      .qr-toast { min-width: 280px; max-width: 90vw; border-radius: 10px; padding: 12px 14px; color: #fff; box-shadow: 0 8px 30px rgba(0,0,0,.18); display: flex; align-items: center; gap: 10px; pointer-events: auto; }
       .qr-toast-success { background: #28a745; }
     </style>
 
@@ -94,11 +63,8 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     toast.className = 'qr-toast qr-toast-success';
     toast.innerHTML = `<div style="flex:1">${frappe.utils.escape_html(message)}</div>`;
     toastsEl.appendChild(toast);
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transition = 'opacity .2s ease';
-      setTimeout(() => toast.remove(), 180);
-    }, ms);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity .2s ease';
+      setTimeout(() => toast.remove(), 180); }, ms);
   }
 
   function beep(freq=880, ms=110) {
@@ -121,6 +87,9 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   const lockDesc  = document.getElementById('qrLockDesc');
   let isLocked = false;
 
+  // Debounce & in-flight kontrol
+  let lastCode = '', lastTime = 0, inFlight = false;
+
   function engageLock(reason='duplicate') {
     isLocked = true;
     if (manual) manual.setAttribute('disabled', 'disabled');
@@ -142,10 +111,12 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       manual.value = '';
       setTimeout(() => manual.focus(), 30);
     }
+    // kritik: debounce & inflight sıfırla
+    lastCode = ''; lastTime = 0; inFlight = false;
     try { localStorage.removeItem('qr_lock'); } catch (e) {}
   }
 
-  // Sayfa yüklenince localStorage'a göre kilidi devam ettir
+  // Sayfa yüklenince localStorage’a göre kilidi devam ettir
   try {
     const ls = localStorage.getItem('qr_lock');
     if (ls) engageLock(ls);
@@ -162,10 +133,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }
     lockBtn.setAttribute('disabled', 'disabled');
 
-    const req = frappe.call({
-      method: 'qr_scanner.api.verify_unlock_password',
-      args: { password: pw }
-    });
+    const req = frappe.call({ method: 'qr_scanner.api.verify_unlock_password', args: { password: pw } });
 
     req.then(r => {
       const m = r.message || {};
@@ -196,41 +164,54 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }
   });
 
-  // Odak kaçarsa input’u geri al (kilitli değilse)
   if (manual) {
     manual.addEventListener('blur', () => { if (!isLocked) setTimeout(() => manual.focus(), 50); });
   }
 
   /* -------- Tarama akışı -------- */
-  let lastCode = '', lastTime = 0;
+  function showErrorAlert(msg) {
+    frappe.show_alert({ message: msg || 'İşlem tamamlanamadı.', indicator: 'red' });
+  }
 
   function onScanned(code) {
-    if (isLocked) return; // kilitliyken işlem yapma
+    if (isLocked || inFlight) return;
     const now = Date.now();
     if (code === lastCode && (now - lastTime) < 800) return; // debounce
     lastCode = code; lastTime = now;
+    inFlight = true;
 
-    frappe.call({
+    const req = frappe.call({
       method: 'qr_scanner.api.create_scan',
       args: { qr_code: code, scanned_via: 'USB Scanner' }
-    }).then(r => {
+    });
+
+    req.then(r => {
       const m = r.message || {};
+      // console.debug('create_scan:', m);
       if (m.created) {
         showSuccessToast(`Kayıt edildi: ${m.name}`, 1800);
         beep(900, 120); vibrate(50);
       } else if (m.reason === 'duplicate') {
-        // yalnızca UI kilidi (server-side lock yok)
         engageLock('duplicate');
         beep(220, 180); vibrate(120);
       } else {
-        // istersen kilit yerine uyarı ver
-        frappe.show_alert({ message: 'İşlem tamamlanamadı.', indicator: 'red' });
+        // Sunucu bir hata/uyarı döndüyse, kullanıcıya içeriği göster
+        const serverMsg =
+          (m.msg) ||
+          (r && r._server_messages && (() => {
+            try { return JSON.parse(r._server_messages).join(' '); } catch(e){ return null; }
+          })()) ||
+          'İşlem tamamlanamadı.';
+        showErrorAlert(serverMsg);
         beep(220, 180); vibrate(120);
       }
-    }).catch(() => {
-      frappe.show_alert({ message: 'Sunucuya ulaşılamadı.', indicator: 'red' });
+    }).catch((err) => {
+      showErrorAlert('Sunucuya ulaşılamadı.');
+      // console.error('create_scan error:', err);
       beep(220, 180); vibrate(120);
-    });
+    }).finally ? req.finally(() => { inFlight = false; }) :
+                 req.always  ? req.always(() => { inFlight = false; }) :
+                               req.then(() => { inFlight = false; }).catch(() => { inFlight = false; });
   }
 
   if (manual) {
