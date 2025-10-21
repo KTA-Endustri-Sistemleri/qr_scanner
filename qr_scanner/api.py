@@ -1,29 +1,35 @@
+# apps/qr_scanner/qr_scanner/api.py
 import hmac
 import frappe
 from frappe import _
 
-import frappe
+# -------------------------
+# Lock yardımcıları
+# -------------------------
 
 def _lock_key(user=None):
+    """Kullanıcı bazlı kilit anahtarı (global istiyorsan sabitle: return 'qr_scanner:lock:global')."""
     user = user or frappe.session.user
     return f"qr_scanner:lock:{user}"
 
 @frappe.whitelist()
-def set_lock(reason="error", ttl=0):
+def set_lock(reason: str = "error", ttl: int = 0):
     """Kullanıcıyı kilitle. ttl>0 verilirse saniye bazlı otomatik düşer (opsiyonel)."""
     key = _lock_key()
-    frappe.cache().hset(key, "reason", reason or "error")
-    frappe.cache().hset(key, "locked", 1)
+    cache = frappe.cache()
+    cache.hset(key, "reason", reason or "error")
+    cache.hset(key, "locked", 1)
     if ttl and int(ttl) > 0:
-        frappe.cache().expire(key, int(ttl))
+        cache.expire(key, int(ttl))
     return {"ok": True}
 
 @frappe.whitelist()
 def get_lock_state():
     """Kullanıcı kilitli mi?"""
     key = _lock_key()
-    locked = frappe.cache().hget(key, "locked")
-    reason = frappe.cache().hget(key, "reason") or "error"
+    cache = frappe.cache()
+    locked = cache.hget(key, "locked")
+    reason = cache.hget(key, "reason") or "error"
     return {"locked": bool(int(locked)) if locked is not None else False, "reason": reason}
 
 @frappe.whitelist()
@@ -33,30 +39,15 @@ def clear_lock():
     frappe.cache().delete(key)
     return {"ok": True}
 
-@frappe.whitelist()
-def verify_unlock_password(password: str):
-    """Doğru parola ise kilidi aç."""
-    try:
-        expected = (frappe.conf or {}).get("qr_scanner_unlock_password")
-        if not expected:
-            return {"ok": False, "reason": "not_configured"}
-        ok = hmac.compare_digest(str(password), str(expected))
-        if ok:
-            clear_lock()
-        return {"ok": bool(ok)}
-    except Exception:
-        frappe.log_error("verify_unlock_password failed", "qr_scanner")
-        return {"ok": False}
-
-@frappe.whitelist()
-def get_csrf():
-    return {"csrf_token": frappe.sessions.get_csrf_token()}
+# -------------------------
+# Parola doğrulama
+# -------------------------
 
 @frappe.whitelist()
 def verify_unlock_password(password: str):
     """
     Tam ekran kilidi kaldırmak için parola doğrulaması.
-    Parola, site_config.json içinde "qr_scanner_unlock_password" anahtarıyla tutulur.
+    Parola site_config.json'da "qr_scanner_unlock_password" anahtarıyla tutulur.
     Örn: bench set-config -g qr_scanner_unlock_password "changeit"
     """
     try:
@@ -64,10 +55,21 @@ def verify_unlock_password(password: str):
         if not expected:
             return {"ok": False, "reason": "not_configured"}
         ok = hmac.compare_digest(str(password), str(expected))
+        if ok:
+            clear_lock()   # <-- başarıda kilidi kaldır
         return {"ok": bool(ok)}
     except Exception:
         frappe.log_error("verify_unlock_password failed", "qr_scanner")
         return {"ok": False}
+
+# (Opsiyonel) CSRF token endpoint'i, gerekiyorsa kullan
+@frappe.whitelist()
+def get_csrf():
+    return {"csrf_token": frappe.sessions.get_csrf_token()}
+
+# -------------------------
+# Scan kaydı
+# -------------------------
 
 @frappe.whitelist()
 def create_scan(qr_code: str, scanned_via: str = "USB Scanner", device_id: str | None = None):
@@ -76,58 +78,26 @@ def create_scan(qr_code: str, scanned_via: str = "USB Scanner", device_id: str |
     - Duplicate bulunduğunda kilidi devreye alır ve 'duplicate' döner.
     - Genel hata durumunda kilidi devreye alır ve 'error' döner.
     """
-    from frappe import _
-
     qr_code = (qr_code or "").strip()
     if not qr_code:
         frappe.throw(_("Empty QR code"))
 
     # 1) Kilit kontrolü (server authoritative)
     try:
-        state = get_lock_state()  # aynı modülde: {"locked": bool, "reason": "..."}
+        state = get_lock_state()
         if state.get("locked"):
             return {"ok": False, "created": False, "reason": "locked"}
     except Exception:
-        # Kilit sorgusu bile patlarsa, güvenlik gereği taramayı durdur
         frappe.log_error(frappe.get_traceback(), "QR Scanner: get_lock_state failed")
         return {"ok": False, "created": False, "reason": "locked"}
 
     # 2) Duplicate kontrolü
     try:
         if frappe.db.exists("QR Scan Record", {"qr_code": qr_code}):
-            # Duplicate yakalandı → kilidi devreye al
             try:
-                set_lock(reason="duplicate")  # aynı modülde: cache'e yazar
+                set_lock(reason="duplicate")
             except Exception:
                 frappe.log_error(frappe.get_traceback(), "QR Scanner: set_lock duplicate failed")
             return {"ok": True, "created": False, "reason": "duplicate"}
     except Exception:
-        # DB erişimi sırasında sorun → güvenli tarafta kal, kilitle
-        frappe.log_error(frappe.get_traceback(), "QR Scanner: duplicate check failed")
-        try:
-            set_lock(reason="error")
-        except Exception:
-            pass
-        return {"ok": False, "created": False, "reason": "error"}
-
-    # 3) Kayıt oluşturma
-    try:
-        doc = frappe.get_doc({
-            "doctype": "QR Scan Record",
-            "qr_code": qr_code,
-            "scanned_via": scanned_via,
-            "device_id": device_id,
-            "scanned_by": frappe.session.user,
-            "status": "Validated",
-        })
-        doc.insert(ignore_permissions=True)
-        frappe.db.commit()
-        return {"ok": True, "created": True, "name": doc.name}
-    except Exception:
-        # Kayıt sırasında herhangi bir hata → kilitle
-        frappe.log_error(frappe.get_traceback(), "QR Scanner: create_scan failed")
-        try:
-            set_lock(reason="error")
-        except Exception:
-            pass
-        return {"ok": False, "created": False, "reason": "error"}
+        frappe.
