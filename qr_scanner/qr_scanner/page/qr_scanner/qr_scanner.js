@@ -157,20 +157,24 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       if (s.locked) {
         engageLock(s.reason || 'error');
       } else {
-        // server kilitli değilse UI da açık kalsın
         releaseLock();
       }
     })
-    .catch(() => {/* sessiz geç */});
+    .catch(() => { /* sessiz geç */ });
 
   // Duplicate tetiklerinde sunucuda kilit + UI, error’da sadece UI
   function lockAndEngage(reason) {
-    frappe.call({
+    const p = frappe.call({
       method: 'qr_scanner.api.set_lock',
       args: { reason: reason || 'error' }
-    }).finally(() => {
-      engageLock(reason || 'error');
     });
+    if (p && typeof p.always === 'function') {
+      p.always(() => engageLock(reason || 'error'));
+    } else if (p && typeof p.finally === 'function') {
+      p.finally(() => engageLock(reason || 'error'));
+    } else {
+      p.then(() => engageLock(reason || 'error')).catch(() => engageLock(reason || 'error'));
+    }
   }
 
   lockForm.addEventListener('submit', (e) => {
@@ -184,13 +188,19 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     lockBtn.setAttribute('disabled', 'disabled');
 
     // Parolayı sunucuda doğrula (server başarıda clear_lock yapıyor)
-    frappe.call({
+    const req = frappe.call({
       method: 'qr_scanner.api.verify_unlock_password',
       args: { password: pw }
-    }).then(r => {
+    });
+
+    req.then(r => {
       const m = r.message || {};
       if (m.ok) {
-        releaseLock();
+        // ekstra emniyet: clear_lock tekrar
+        const c = frappe.call({ method: 'qr_scanner.api.clear_lock' });
+        if (c && typeof c.always === 'function') c.always(() => releaseLock());
+        else if (c && typeof c.finally === 'function') c.finally(() => releaseLock());
+        else c.then(() => releaseLock()).catch(() => releaseLock());
         beep(880, 120); vibrate(50);
       } else {
         lockErr.textContent = (m.reason === 'not_configured')
@@ -204,9 +214,16 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }).catch(() => {
       lockErr.textContent = 'Sunucuya ulaşılamadı.'; lockErr.style.display = 'block';
       beep(220, 180); vibrate(120);
-    }).finally(() => {
-      lockBtn.removeAttribute('disabled');
     });
+
+    if (req && typeof req.always === 'function') {
+      req.always(() => lockBtn.removeAttribute('disabled'));
+    } else if (req && typeof req.finally === 'function') {
+      req.finally(() => lockBtn.removeAttribute('disabled'));
+    } else {
+      req.then(() => lockBtn.removeAttribute('disabled'))
+         .catch(() => lockBtn.removeAttribute('disabled'));
+    }
   });
 
   // Odak kaçarsa input’u geri al (kilitli değilse)
@@ -228,7 +245,6 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       args: { qr_code: code, scanned_via: 'USB Scanner' }
     }).then(r => {
       const m = r.message || {};
-      // console.debug('[QR] create_scan response:', m);
       if (m.created) {
         showSuccessToast(`Kayıt edildi: ${m.name}`, 1800);
         beep(900, 120); vibrate(50);
