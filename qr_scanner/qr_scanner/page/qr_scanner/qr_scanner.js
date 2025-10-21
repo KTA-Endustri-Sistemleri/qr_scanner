@@ -1,4 +1,4 @@
-// QR Scanner Desk Page – USB only + Fullscreen Red Lock on Error/Duplicate
+// QR Scanner Desk Page – USB only + Fullscreen Red Lock with server-persisted state
 frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   const page = frappe.ui.make_app_page({
     parent: wrapper,
@@ -49,7 +49,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         80% { transform: translateX(4px); }
       }
 
-      /* Önceki toast stilleri duruyor ama artık kullanılmıyor (success hariç) */
+      /* Success toast (sadece başarılı kayıtlarda) */
       .qr-toast-container {
         position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
         z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center;
@@ -63,10 +63,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         pointer-events: auto;
       }
       .qr-toast-success { background: #28a745; }
-      .qr-toast .qr-close {
-        margin-left: 8px; border: none; background: rgba(255,255,255,.2);
-        color: #fff; border-radius: 6px; padding: 2px 8px; cursor: pointer;
-      }
+      .qr-toast .qr-close { display:none; }
     </style>
 
     <div class="qr-wrap card p-4">
@@ -92,18 +89,15 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     </div>
   `);
 
-  const manual   = document.getElementById('manual');
-  const toastsEl = document.getElementById('qrToastContainer');
+  const manual    = document.getElementById('manual');
+  const toastsEl  = document.getElementById('qrToastContainer');
 
-  /* -------- Toast (sadece success için kullanıyoruz) -------- */
+  /* -------- Toast (sadece success için) -------- */
   function showSuccessToast(message = '', ms = 1500) {
     if (!toastsEl) return;
     const toast = document.createElement('div');
     toast.className = `qr-toast qr-toast-success`;
-    toast.innerHTML = `
-      <div style="flex:1">${frappe.utils.escape_html(message)}</div>
-      <button class="qr-close" style="display:none">Kapat</button>
-    `;
+    toast.innerHTML = `<div style="flex:1">${frappe.utils.escape_html(message)}</div>`;
     toastsEl.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
@@ -125,12 +119,13 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   function vibrate(ms=60) { if (navigator.vibrate) navigator.vibrate(ms); }
 
   /* -------- FULLSCREEN LOCK yardımcıları -------- */
-  const lockEl   = document.getElementById('qrLock');
-  const lockForm = document.getElementById('qrLockForm');
-  const lockInput= document.getElementById('qrLockInput');
-  const lockBtn  = document.getElementById('qrLockBtn');
-  const lockErr  = document.getElementById('qrLockError');
-  const lockDesc = document.getElementById('qrLockDesc');
+  const lockEl    = document.getElementById('qrLock');
+  const lockForm  = document.getElementById('qrLockForm');
+  const lockInput = document.getElementById('qrLockInput');
+  const lockBtn   = document.getElementById('qrLockBtn');
+  const lockErr   = document.getElementById('qrLockError');
+  const lockDesc  = document.getElementById('qrLockDesc');
+
   let isLocked = false;
 
   function engageLock(reason = 'error') {
@@ -143,6 +138,8 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }
     lockErr.style.display = 'none';
     lockEl.classList.add('show');
+    // Görsel boşlukları minimize etmek istersen localStorage ile de tutabilirsin:
+    // localStorage.setItem('qr_scanner_locked', '1');
     setTimeout(() => lockInput.focus(), 50);
   }
   function releaseLock() {
@@ -153,6 +150,27 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       manual.value = '';
       setTimeout(() => manual.focus(), 30);
     }
+    // localStorage.removeItem('qr_scanner_locked');
+  }
+
+  // Sayfa yüklenince sunucudan kilit durumunu sor
+  frappe.call({ method: 'qr_scanner.api.get_lock_state' })
+    .then(r => {
+      const s = r.message || {};
+      if (s.locked) {
+        engageLock(s.reason || 'error');
+      }
+    })
+    .catch(() => {/* sessiz geç */});
+
+  // Duplicate/Error tetiklerinde önce sunucuda kilitle, sonra UI'ı kilitle
+  function lockAndEngage(reason) {
+    frappe.call({
+      method: 'qr_scanner.api.set_lock',
+      args: { reason: reason || 'error' }
+    }).finally(() => {
+      engageLock(reason || 'error');
+    });
   }
 
   lockForm.addEventListener('submit', (e) => {
@@ -165,7 +183,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }
     lockBtn.setAttribute('disabled', 'disabled');
 
-    // Sunucuya doğrulama çağrısı (JS içinde parola saklamıyoruz!)
+    // Parolayı sunucuda doğrula (server başarıda clear_lock yapıyor)
     frappe.call({
       method: 'qr_scanner.api.verify_unlock_password',
       args: { password: pw }
@@ -198,6 +216,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
 
   /* -------- Tarama akışı -------- */
   let lastCode = '', lastTime = 0;
+
   function onScanned(code) {
     if (isLocked) return; // kilitliyken işlem yapma
     const now = Date.now();
@@ -213,15 +232,20 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         showSuccessToast(`Kayıt edildi: ${m.name}`, 1800);
         beep(900, 120); vibrate(50);
       } else if (m.reason === 'duplicate') {
-        // Toast yerine kilit ekranı
-        engageLock('duplicate');
+        // Sunucuda da kilitle
+        lockAndEngage('duplicate');
+        beep(220, 180); vibrate(120);
+      } else if (m.reason === 'locked') {
+        // Sunucu zaten kilitli diyorsa UI'ı da kilitle
+        engageLock('error');
         beep(220, 180); vibrate(120);
       } else {
-        engageLock('error');
+        // Genel hata
+        lockAndEngage('error');
         beep(220, 180); vibrate(120);
       }
     }).catch(() => {
-      engageLock('error');
+      lockAndEngage('error');
       beep(220, 180); vibrate(120);
     });
   }
