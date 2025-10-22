@@ -1,7 +1,7 @@
 # 📦 QR Scanner (ERPNext v15.81.1)
 
-Scans QR labels with a **USB barcode scanner** ⌨️ and records them in ERPNext.  
-Blocks **duplicates** and, on duplicate, shows a **fullscreen red lock** that requires an **admin password** to continue.
+Scans QR labels using a **USB barcode scanner** ⌨️ and records them in ERPNext.  
+On a **duplicate**, a **fullscreen red lock** appears — requires an **admin password** to continue.
 
 ---
 
@@ -12,71 +12,76 @@ bench get-app qr_scanner https://github.com/KTA-Endustri-Sistemleri/qr_scanner.g
 bench --site your.site install-app qr_scanner
 bench --site your.site migrate
 bench build && bench restart
-# Password used by the fullscreen lock (client asks server to verify)
-bench set-config -g qr_scanner_unlock_password "changeit"
 ```
-
-> ⚙️ If you deploy with Docker and split frontend/backend containers,  
-> run `bench build` in the **frontend** container and `migrate` in the **backend** container.
+> 🐳 **In Docker setups:**  
+> - Run `bench build` inside the **frontend** container  
+> - Run `bench migrate` inside the **backend/site** container
 
 ---
 
 ## ▶️ Usage
-- Open the **QR Scanner** page in Desk: `https://your.site/app/qr-scanner`
-- Scan using a **USB keyboard-wedge** scanner (or type and press **Enter**).
+- Open the **QR Scanner** page: `https://your.site/app/qr-scanner`  
+- Scan with a **USB keyboard-wedge** scanner or type manually and press **Enter**.  
 - Feedback:
-  - ✅ **Success** → green toast (auto-closes in ~1–2s)
-  - 🔁 **Duplicate** → **fullscreen red lock** appears. Enter the admin password to continue scanning.
+  - ✅ **Success** → green toast (auto-closes after ~1–2s)  
+  - 🔁 **Duplicate** → fullscreen **red lock** appears; enter the admin password to continue.
 
 **Quality of life**
-- Input auto-refocuses if it loses focus.
-- Rapid repeated codes are ignored (debounce).
-- After unlock: input is re-enabled, internal state is reset.
-- Password field is always **cleared on every lock** (autofill disabled).
+- Input auto-refocuses when it loses focus  
+- Repeated quick scans are ignored (**debounce**)  
+- After unlocking: input re-enables and state resets  
+- Password field is always **cleared** (autofill disabled)
+
+---
+
+## ⚙️ QR Scan Settings (Single DocType)
+Centralized configuration for all client behaviors:
+- `success_toast_ms` → Toast duration  
+- `beep_enabled`, `vibrate_enabled` → Enable/disable audio or vibration feedback  
+- `debounce_ms` → Minimum interval between scans  
+- `autofocus_back` → Auto-focus on the input field  
+- `silence_ms` → Silence window for auto-submit  
+- `lock_on_duplicate` → Enable/disable lock on duplicates  
+- `unlock_password` → Admin password (verified server-side)
+
+> ⚡ `site_config.json`’s `qr_scanner_unlock_password` is used as a fallback.  
+> The `get_client_settings` API exposes these settings to the front-end.
 
 ---
 
 ## 🔐 Permissions
-- Access to the **page** and **API** is restricted to these roles:
-  - `System Manager`
-  - `QR Scanner User`
-  - `QR Scanner Manager`
-- You can further adjust Doctype and API permissions as needed.
+Access to both **page** and **API** is granted to:
+- `System Manager`
+- `QR Scanner User`
+- `QR Scanner Manager`
+
+You can still customize Doctype and API permissions as needed.
 
 ---
 
 ## 🧪 Duplicate Behavior
-- Server checks for duplicates; a duplicate QR is **not inserted**.
-- For concurrency safety, add a **UNIQUE index** on the `qr_code` field of `QR Scan Record`.
+- Duplicates are never inserted again.  
+- For concurrency safety, ensure a **UNIQUE index** on the `qr_code` field of `QR Scan Record`.
 
 ---
 
 ## 🔒 Lock & Password
-- Duplicate → **fullscreen red lock**
-- Password is verified via `qr_scanner.api.verify_unlock_password`
-- Correct password hides the lock (client-side lock, no server cache)
-- Password is stored in `site_config.json` (`qr_scanner_unlock_password`)
+- On duplicate → **fullscreen red lock**  
+- Password is verified via `qr_scanner.api.verify_unlock_password`  
+- Successful unlock closes the lock (client-side only, no Redis cache)  
+- Password can be configured via `QR Scan Settings` or `site_config.json`
 
-> ⚡ Server no longer keeps a persistent lock.  
-> This improves responsiveness and avoids cache desync.  
-> Password check still happens server-side for security.
+> 🔒 Persistent server locks were removed for better speed and stability.  
+> Passwords remain verified server-side for security.
 
 ---
 
 ## 🧩 Quick Troubleshooting
-| Symptom | Fix |
-|----------|------|
+| Issue | Fix |
+|--------|------|
 | Page not visible | `bench reload-doc "QR Scanner" page qr_scanner` |
-| Permission error | Check role assignment: System Manager, QR Scanner User, QR Scanner Manager |
-| Duplicate not blocked | Ensure UNIQUE index on `qr_code` |
-| Lock not unlocking | Verify `qr_scanner_unlock_password` in site config |
-| Scanner stops after lock | Update JS; it now resets debounce/inFlight and clears password field |
-
----
-
-## 🗺️ Roadmap
-1. **⚙️ QR Scanner Settings (Single DocType)**  
-   Manage UI preferences: `success_toast_ms`, `beep_enabled`, `vibrate_enabled`, `debounce_ms`, `autofocus_back`, `silence_ms`, etc.  
-   **API:** `qr_scanner.api.get_client_settings`
-2. **⚡ Auto-Submit Without Enter (USB burst detection)**  
-   Detects typing bursts and auto-submits after silence (configurable).
+| Permission denied | Check roles: System Manager, QR Scanner User, QR Scanner Manager |
+| Duplicate check fails | Ensure UNIQUE index on `qr_code` |
+| Lock not opening | Check `lock_on_duplicate` in settings |
+| No password set | Fill in the `Unlock Password` in QR Scan Settings |
+| Scanner stuck after lock | Update JS — password input now resets correctly |
