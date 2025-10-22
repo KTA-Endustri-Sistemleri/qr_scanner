@@ -13,7 +13,8 @@ after_migrate = "qr_scanner.install.after_migrate"
 # QR Scan Settings kaydedildiğinde client cache’i temizlemek için
 doc_events = {
     "QR Scan Settings": {
-        "on_update": "qr_scanner.qr_scanner.doctype.qr_scan_settings.qr_scan_settings.QRScanSettings.on_update"
+        # sınıf yolu DEĞİL, fonksiyon yolu!
+        "on_update": "qr_scanner.qr_scanner.doctype.qr_scan_settings.qr_scan_settings.settings_on_update"
     }
 }
 

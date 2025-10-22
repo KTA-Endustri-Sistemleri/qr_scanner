@@ -5,7 +5,7 @@ CACHE_KEY = "qr_scanner:client_settings"
 
 class QRScanSettings(Document):
     def on_update(self):
-        # settings kaydedilince client cache temizle
+        # DocType kendi kaydedildiğinde cache'i temizle (otomatik çağrılır)
         try:
             frappe.cache().delete_value(CACHE_KEY)
         except Exception:
@@ -25,8 +25,14 @@ def get_cached_settings():
             "autofocus_back":   1 if doc.get("autofocus_back") else 0,
             "silence_ms":       int(doc.get("silence_ms") or 120),
             "lock_on_duplicate":1 if doc.get("lock_on_duplicate") else 0
-            # parola bilinçli olarak dönülmüyor
         }
         cache.set_value(CACHE_KEY, safe, expires_in_sec=60)
         data = safe
     return data
+
+# --- Hook için fonksiyon (sınıf metodu yerine fonksiyon yolu verilecektir)
+def settings_on_update(doc, method):
+    try:
+        frappe.cache().delete_value(CACHE_KEY)
+    except Exception:
+        pass
