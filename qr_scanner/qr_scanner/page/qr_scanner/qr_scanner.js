@@ -1,4 +1,4 @@
-// --- sadece değişen/önemli kısımları vurguladım; bütün dosyayı koyuyorum ---
+// --- QR Scanner – USB only + Fullscreen Red Lock (client-side) ---
 frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   const page = frappe.ui.make_app_page({ parent: wrapper, title: 'QR Scanner', single_column: true });
 
@@ -42,7 +42,20 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         <div id="qrLockTitle" class="qr-lock-title">Erişim Kilitli</div>
         <div id="qrLockDesc" class="qr-lock-desc">Yinelenen barkod algılandı. Devam etmek için yönetici parolasını girin.</div>
         <form id="qrLockForm" class="qr-lock-form" autocomplete="off">
-          <input id="qrLockInput" class="qr-lock-input" type="password" placeholder="Yönetici parolası" />
+          <!-- dummy input: bazı tarayıcıların autofill'ini kırar -->
+          <input type="text" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px" />
+          <input
+            id="qrLockInput"
+            class="qr-lock-input"
+            type="password"
+            placeholder="Yönetici parolası"
+            name="unlock_pwd"
+            autocomplete="new-password"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            inputmode="text"
+          />
           <button id="qrLockBtn" class="qr-lock-btn" type="submit">Kilidi Aç</button>
         </form>
         <div id="qrLockError" class="qr-lock-error">Parola hatalı.</div>
@@ -74,7 +87,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   }
   function vibrate(ms=60) { if (navigator.vibrate) navigator.vibrate(ms); }
 
- // --- STATE ---
+  // --- STATE ---
   const DEBUG = window.QR_DEBUG === true;
   let isLocked = false;
   let lastCode = '', lastTime = 0, inFlight = false;
@@ -86,12 +99,24 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       reason === 'duplicate'
         ? 'Yinelenen barkod algılandı. Devam etmek için yönetici parolasını girin.'
         : 'Devam etmek için yönetici parolasını girin.';
-    document.getElementById('qrLockError').style.display = 'none';
-    document.getElementById('qrLock').classList.add('show');
+    const lockErr = document.getElementById('qrLockError');
+    const lockEl  = document.getElementById('qrLock');
+    const lockInput = document.getElementById('qrLockInput');
+
+    lockErr.style.display = 'none';
+    lockEl.classList.add('show');
+
+    // her açılışta parola alanını temizle (autofill'e karşı çift temizlik)
+    if (lockInput) {
+      lockInput.value = '';
+      setTimeout(() => { try { lockInput.value = ''; } catch(e) {} }, 0);
+    }
+
     try { localStorage.setItem('qr_lock', reason || 'duplicate'); } catch (e) {}
-    setTimeout(() => document.getElementById('qrLockInput').focus(), 50);
+    setTimeout(() => lockInput && lockInput.focus(), 50);
     if (DEBUG) console.debug('[QR] engageLock:', reason);
   }
+
   function releaseLock() {
     isLocked = false;
     document.getElementById('qrLock').classList.remove('show');
@@ -100,13 +125,18 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       manual.value = '';
       setTimeout(() => manual.focus(), 30);
     }
-    // >>> kritik reset <<<
-    lastCode = '';
-    lastTime = 0;
-    inFlight = false;
+    // kritik resetler + parola alanını temizle
+    lastCode = ''; lastTime = 0; inFlight = false;
+    const lockInput = document.getElementById('qrLockInput');
+    if (lockInput) lockInput.value = '';
     try { localStorage.removeItem('qr_lock'); } catch (e) {}
     if (DEBUG) console.debug('[QR] releaseLock: state reset');
   }
+
+  // Focus'a gelince de bir kez daha boşalt (ısrarcı autofill için)
+  (document.getElementById('qrLockInput') || {}).addEventListener?.('focus', () => {
+    const el = document.getElementById('qrLockInput'); if (el) el.value = '';
+  }, { once: true });
 
   // Sayfa yüklenince localStorage’a göre kilidi devam ettir
   try {
@@ -114,17 +144,17 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     if (ls) engageLock(ls);
   } catch (e) {}
 
-  // Parola formu (değişmedi, sadece debug/console koydum)
+  // Parola formu
   document.getElementById('qrLockForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const pw = (document.getElementById('qrLockInput').value || '').trim();
-    const lockErr = document.getElementById('qrLockError');
-    const lockBtn = document.getElementById('qrLockBtn');
+    const lockInput = document.getElementById('qrLockInput');
+    const lockErr   = document.getElementById('qrLockError');
+    const lockBtn   = document.getElementById('qrLockBtn');
+    const pw = (lockInput.value || '').trim();
 
     if (!pw) {
       lockErr.textContent = 'Parola boş olamaz.'; lockErr.style.display = 'block';
-      document.getElementById('qrLockInput').classList.add('qr-shake');
-      setTimeout(() => document.getElementById('qrLockInput').classList.remove('qr-shake'), 300);
+      lockInput.classList.add('qr-shake'); setTimeout(() => lockInput.classList.remove('qr-shake'), 300);
       return;
     }
     lockBtn.setAttribute('disabled','disabled');
@@ -135,19 +165,23 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       const m = r.message || {};
       if (DEBUG) console.debug('[QR] verify_unlock_password resp:', m);
       if (m.ok) {
+        // başarıda da input'u temizle
+        lockInput.value = '';
         releaseLock();
         beep(880,120); vibrate(50);
       } else {
         lockErr.textContent = (m.reason === 'not_configured') ? 'Parola yapılandırılmamış. Lütfen yöneticinize başvurun.' : 'Parola hatalı.';
         lockErr.style.display = 'block';
-        document.getElementById('qrLockInput').value = '';
-        document.getElementById('qrLockInput').classList.add('qr-shake');
-        setTimeout(() => document.getElementById('qrLockInput').classList.remove('qr-shake'), 300);
+        // hatada da temizle
+        lockInput.value = '';
+        lockInput.classList.add('qr-shake'); setTimeout(() => lockInput.classList.remove('qr-shake'), 300);
         beep(220,180); vibrate(120);
       }
     }).catch((err) => {
       if (DEBUG) console.error('[QR] verify_unlock_password error:', err);
       lockErr.textContent = 'Sunucuya ulaşılamadı.'; lockErr.style.display = 'block';
+      // bağlantı hatasında da temizle
+      lockInput.value = '';
       beep(220,180); vibrate(120);
     });
 
@@ -159,18 +193,10 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   }
 
   function onScanned(code) {
-    // ENGEL SEBEPLERİNİ LOGLA
-    if (isLocked) { if (DEBUG) console.debug('[QR] skip: locked'); return; }
-    if (inFlight) { if (DEBUG) console.debug('[QR] skip: inFlight'); return; }
-
+    if (isLocked || inFlight) return;
     const now = Date.now();
-    if (code === lastCode && (now - lastTime) < 800) {
-      if (DEBUG) console.debug('[QR] skip: debounce', {code, dt: now-lastTime});
-      return;
-    }
-
+    if (code === lastCode && (now - lastTime) < 800) return; // debounce
     lastCode = code; lastTime = now; inFlight = true;
-    if (DEBUG) console.debug('[QR] create_scan →', code);
 
     const req = frappe.call({
       method: 'qr_scanner.api.create_scan',
@@ -179,7 +205,6 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
 
     req.then(r => {
       const m = r.message || {};
-      if (DEBUG) console.debug('[QR] create_scan resp:', m, 'server_messages:', r && r._server_messages);
       if (m.created) {
         showSuccessToast(`Kayıt edildi: ${m.name}`, 1800);
         beep(900,120); vibrate(50);
@@ -194,13 +219,12 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
         showErrorAlert(serverMsg);
         beep(220,180); vibrate(120);
       }
-    }).catch((err) => {
-      if (DEBUG) console.error('[QR] create_scan error:', err);
+    }).catch(() => {
       showErrorAlert('Sunucuya ulaşılamadı.');
       beep(220,180); vibrate(120);
-    });
-
-    (req.finally||req.always||function(f){req.then(f).catch(f)})(() => { inFlight = false; if (DEBUG) console.debug('[QR] inFlight=false'); });
+    }).finally ? req.finally(() => { inFlight = false; }) :
+                 req.always  ? req.always(() => { inFlight = false; }) :
+                               req.then(() => { inFlight = false; }).catch(() => { inFlight = false; });
   }
 
   manual?.addEventListener('keydown', (e) => {
