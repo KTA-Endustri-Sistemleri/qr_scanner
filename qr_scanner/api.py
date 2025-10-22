@@ -6,20 +6,34 @@ from frappe.utils.password import get_decrypted_password
 
 @frappe.whitelist()
 def get_client_settings():
-    """İstemciye güvenli ayarları döner (parola **yok**)."""
+    """
+    İstemciye güvenli ayarları döner (parola ASLA dönmez).
+    QR Scan Settings'ten okumaya çalışır; import/okuma hatasında defaults verir.
+    """
+    # Güvenli defaults
+    defaults = {
+        "success_toast_ms": 1500,
+        "beep_enabled": 1,
+        "vibrate_enabled": 1,
+        "debounce_ms": 800,
+        "autofocus_back": 1,
+        "silence_ms": 120,
+        "lock_on_duplicate": 1,
+    }
+
     try:
+        # DocType helper'ı import et (hata alırsa defaults'a düşeceğiz)
         from qr_scanner.qr_scanner.doctype.qr_scan_settings.qr_scan_settings import get_cached_settings
-        return get_cached_settings()
+        data = get_cached_settings() or {}
+        # Beklenmeyen tipler için defansif merge
+        if not isinstance(data, dict):
+            return defaults
+        # defaults üzerinde gelenleri uygula
+        defaults.update({k: data.get(k) for k in defaults.keys() if k in data})
+        return defaults
     except Exception:
-        return {
-            "success_toast_ms": 1500,
-            "beep_enabled": 1,
-            "vibrate_enabled": 1,
-            "debounce_ms": 800,
-            "autofocus_back": 1,
-            "silence_ms": 120,
-            "lock_on_duplicate": 1
-        }
+        # Buraya düşüyorsa ya import yolu hatalıdır ya da DocType henüz migrate edilmemiştir
+        return defaults
 
 def _get_settings_password():
     """Parolayı 'QR Scan Settings' Password alanından getir; yoksa site_config fallback."""
