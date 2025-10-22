@@ -63,20 +63,48 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     </div>
   `);
 
-  const manual    = document.getElementById('manual');
-  const toastsEl  = document.getElementById('qrToastContainer');
+  const manual   = document.getElementById('manual');
+  const toastsEl = document.getElementById('qrToastContainer');
 
-  function showSuccessToast(message = '', ms = 1500) {
+  // ---------- Server settings (QR Scan Settings) ----------
+  let CFG = {
+    success_toast_ms: 1500,
+    beep_enabled: 1,
+    vibrate_enabled: 1,
+    debounce_ms: 800,
+    autofocus_back: 1,
+    silence_ms: 120,
+    lock_on_duplicate: 1
+  };
+
+  const applySettings = (s) => {
+    if (!s) return;
+    CFG = Object.assign(CFG, s || {});
+  };
+
+  // Ayarları çek (parola burada asla dönmez)
+  frappe.call({ method: 'qr_scanner.api.get_client_settings' })
+    .then(r => applySettings(r.message))
+    .catch(() => { /* sessiz geç, defaults */ });
+
+  // ---------- Toast ----------
+  function showSuccessToast(message = '', msOverride) {
     if (!toastsEl) return;
+    const ms = typeof msOverride === 'number' ? msOverride : (CFG.success_toast_ms || 1500);
     const toast = document.createElement('div');
     toast.className = 'qr-toast qr-toast-success';
     toast.innerHTML = `<div style="flex:1">${frappe.utils.escape_html(message)}</div>`;
     toastsEl.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity .2s ease';
-      setTimeout(() => toast.remove(), 180); }, ms);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity .2s ease';
+      setTimeout(() => toast.remove(), 180);
+    }, ms);
   }
 
+  // ---------- Beep & Vibrate ----------
   function beep(freq=880, ms=110) {
+    if (!CFG.beep_enabled) return;
     try {
       const ctx = new (window.AudioContext||window.webkitAudioContext)();
       const osc = ctx.createOscillator(); const gain = ctx.createGain();
@@ -85,9 +113,12 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       osc.start(); setTimeout(() => { osc.stop(); ctx.close(); }, ms);
     } catch (e) {}
   }
-  function vibrate(ms=60) { if (navigator.vibrate) navigator.vibrate(ms); }
+  function vibrate(ms=60) {
+    if (!CFG.vibrate_enabled) return;
+    if (navigator.vibrate) navigator.vibrate(ms);
+  }
 
-  // --- STATE ---
+  // ---------- STATE ----------
   const DEBUG = window.QR_DEBUG === true;
   let isLocked = false;
   let lastCode = '', lastTime = 0, inFlight = false;
@@ -95,18 +126,22 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   function engageLock(reason='duplicate') {
     isLocked = true;
     manual?.setAttribute('disabled','disabled');
-    document.getElementById('qrLockDesc').textContent =
-      reason === 'duplicate'
+
+    const lockDesc  = document.getElementById('qrLockDesc');
+    const lockErr   = document.getElementById('qrLockError');
+    const lockEl    = document.getElementById('qrLock');
+    const lockInput = document.getElementById('qrLockInput');
+
+    if (lockDesc) {
+      lockDesc.textContent = (reason === 'duplicate')
         ? 'Yinelenen barkod algılandı. Devam etmek için yönetici parolasını girin.'
         : 'Devam etmek için yönetici parolasını girin.';
-    const lockErr = document.getElementById('qrLockError');
-    const lockEl  = document.getElementById('qrLock');
-    const lockInput = document.getElementById('qrLockInput');
+    }
 
     lockErr.style.display = 'none';
     lockEl.classList.add('show');
 
-    // her açılışta parola alanını temizle (autofill'e karşı çift temizlik)
+    // her açılışta parola alanını kesin temizle (autofill'e karşı iki kez)
     if (lockInput) {
       lockInput.value = '';
       setTimeout(() => { try { lockInput.value = ''; } catch(e) {} }, 0);
@@ -133,7 +168,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     if (DEBUG) console.debug('[QR] releaseLock: state reset');
   }
 
-  // Focus'a gelince de bir kez daha boşalt (ısrarcı autofill için)
+  // Odak geldiğinde bir kez daha boşalt (ısrarcı autofill için)
   (document.getElementById('qrLockInput') || {}).addEventListener?.('focus', () => {
     const el = document.getElementById('qrLockInput'); if (el) el.value = '';
   }, { once: true });
@@ -144,7 +179,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     if (ls) engageLock(ls);
   } catch (e) {}
 
-  // Parola formu
+  // ---------- Parola formu ----------
   document.getElementById('qrLockForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const lockInput = document.getElementById('qrLockInput');
@@ -165,14 +200,14 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       const m = r.message || {};
       if (DEBUG) console.debug('[QR] verify_unlock_password resp:', m);
       if (m.ok) {
-        // başarıda da input'u temizle
         lockInput.value = '';
         releaseLock();
         beep(880,120); vibrate(50);
       } else {
-        lockErr.textContent = (m.reason === 'not_configured') ? 'Parola yapılandırılmamış. Lütfen yöneticinize başvurun.' : 'Parola hatalı.';
+        lockErr.textContent = (m.reason === 'not_configured')
+          ? 'Parola yapılandırılmamış. Lütfen yöneticinize başvurun.'
+          : 'Parola hatalı.';
         lockErr.style.display = 'block';
-        // hatada da temizle
         lockInput.value = '';
         lockInput.classList.add('qr-shake'); setTimeout(() => lockInput.classList.remove('qr-shake'), 300);
         beep(220,180); vibrate(120);
@@ -180,7 +215,6 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }).catch((err) => {
       if (DEBUG) console.error('[QR] verify_unlock_password error:', err);
       lockErr.textContent = 'Sunucuya ulaşılamadı.'; lockErr.style.display = 'block';
-      // bağlantı hatasında da temizle
       lockInput.value = '';
       beep(220,180); vibrate(120);
     });
@@ -188,14 +222,16 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     (req.finally||req.always||function(f){req.then(f).catch(f)})(() => lockBtn.removeAttribute('disabled'));
   });
 
+  // ---------- Yardımcılar ----------
   function showErrorAlert(msg) {
     frappe.show_alert({ message: msg || 'İşlem tamamlanamadı.', indicator: 'red' });
   }
 
+  // ---------- Tarama akışı ----------
   function onScanned(code) {
     if (isLocked || inFlight) return;
     const now = Date.now();
-    if (code === lastCode && (now - lastTime) < 800) return; // debounce
+    if (code === lastCode && (now - lastTime) < (CFG.debounce_ms || 800)) return; // debounce ayardan
     lastCode = code; lastTime = now; inFlight = true;
 
     const req = frappe.call({
@@ -206,10 +242,14 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     req.then(r => {
       const m = r.message || {};
       if (m.created) {
-        showSuccessToast(`Kayıt edildi: ${m.name}`, 1800);
+        showSuccessToast(`Kayıt edildi: ${m.name}`, CFG.success_toast_ms);
         beep(900,120); vibrate(50);
       } else if (m.reason === 'duplicate') {
-        engageLock('duplicate');
+        if (CFG.lock_on_duplicate) {
+          engageLock('duplicate');
+        } else {
+          showErrorAlert('Duplicate: bu barkod daha önce okutulmuş.');
+        }
         beep(220,180); vibrate(120);
       } else {
         const serverMsg =
@@ -222,11 +262,12 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
     }).catch(() => {
       showErrorAlert('Sunucuya ulaşılamadı.');
       beep(220,180); vibrate(120);
-    }).finally ? req.finally(() => { inFlight = false; }) :
-                 req.always  ? req.always(() => { inFlight = false; }) :
-                               req.then(() => { inFlight = false; }).catch(() => { inFlight = false; });
+    });
+
+    (req.finally||req.always||function(f){req.then(f).catch(f)})(() => { inFlight = false; });
   }
 
+  // Enter ile gönderim
   manual?.addEventListener('keydown', (e) => {
     if (isLocked) return;
     if (e.key === 'Enter') {
@@ -235,6 +276,9 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
       manual.value = '';
     }
   });
+
+  // Odak kaçarsa geri al (ayar bağlı)
+  manual?.addEventListener('blur', () => { if (CFG.autofocus_back && !isLocked) setTimeout(() => manual.focus(), 50); });
 
   manual?.focus();
 };
