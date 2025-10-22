@@ -1,6 +1,7 @@
 # 📦 QR Scanner (ERPNext v15.81.1)
 
-Test cihazından gelen QR etiketlerini **USB barkod okuyucu** ⌨️ ile tarayıp ERPNext’e kaydeder. **Duplicate** kayıtları 🚫 otomatik engeller.
+**USB barkod okuyucu** ⌨️ ile QR etiketlerini tarar ve ERPNext’e kaydeder.  
+**Duplicate** durumunda **tam ekran kırmızı kilit** açılır, devam etmek için **yönetici parolası** gerekir.
 
 ---
 
@@ -11,49 +12,71 @@ bench get-app qr_scanner https://github.com/KTA-Endustri-Sistemleri/qr_scanner.g
 bench --site your.site install-app qr_scanner
 bench --site your.site migrate
 bench build && bench restart
+# Tam ekran kilitte kullanılacak parola (istemci sunucuya doğrulatır)
 bench set-config -g qr_scanner_unlock_password "changeit"
 ```
+
+> 🐳 Docker ortamında:  
+> - `bench build` → **frontend** container’ında  
+> - `bench migrate` → **backend/site** container’ında çalıştırılmalı.
 
 ---
 
 ## ▶️ Kullanım
-- Desk’te **QR Scanner** sayfasını açın: `https://your.site/app/qr-scanner`  
-- **USB tarayıcı** ile okutun.  
-- Sonuçlar **toast** bildirimleriyle görünür:  
-  - ✅ **Başarılı** → yeşil, 1–2 sn sonra kendiliğinden kapanır.  
-  - 🔁 **Duplicate** → kırmızı, kullanıcı kapatana kadar kalır.
+- Desk’te **QR Scanner** sayfasını açın: `https://your.site/app/qr-scanner`
+- **USB tarayıcı** ile okutun veya elle yazıp **Enter**’a basın.
+- Geri bildirim:
+  - ✅ **Başarılı** → yeşil toast (1–2 sn sonra kapanır)
+  - 🔁 **Duplicate** → **tam ekran kırmızı kilit** açılır; parola girin.
 
-> 💡 **İpucu:** USB tarayıcı odak kaybederse alan otomatik yeniden odaklanır. Hızlı taramalarda aynı kod kısa aralıkla tekrarlandıysa yazılım bunu yoksayar (debounce).
+**Kullanım kolaylıkları**
+- Odak kaybolursa alan otomatik yeniden odaklanır.  
+- Aynı kod kısa aralıkla gelirse yoksayılır (debounce).  
+- Kilit açıldıktan sonra alan yeniden aktifleşir, dahili durum sıfırlanır.  
+- Parola kutusu her seferinde **boş gelir**, autofill devre dışı.
 
 ---
 
 ## 🔐 İzinler
-- Sayfa ve API, varsayılan olarak **System Manager** (ve isterseniz `QR Scanner User`) rolü ile sınırlandırılabilir.
-- Doctype ve endpoint izinlerini ihtiyacınıza göre düzenleyin.
+- Sayfa ve API erişimi artık şu rollere tanımlıdır:
+  - `System Manager`
+  - `QR Scanner User`
+  - `QR Scanner Manager`
+- Gerekirse Doctype ve endpoint izinlerini özelleştirebilirsiniz.
 
 ---
 
 ## 🧪 Duplicate Davranışı
-- Sunucu tarafında duplicate kontrolü yapılır; duplicate olan barkod **yeniden kaydedilmez**.  
-- Eşzamanlı taramalar için veritabanında `qr_code` alanında **UNIQUE index** önerilir (veri bütünlüğü için).
+- Duplicate QR kodlar yeniden kaydedilmez.  
+- Eşzamanlı işlemler için `QR Scan Record`’da `qr_code` alanına **UNIQUE index** ekleyin.
+
+---
+
+## 🔒 Kilit & Parola
+- Duplicate → **tam ekran kırmızı kilit**.  
+- Parola girişi `qr_scanner.api.verify_unlock_password` ile sunucuda doğrulanır.  
+- Doğru parola → kilit kapanır (istemci tarafı kilit; server cache kullanılmaz).  
+- Parola `site_config.json`’da `qr_scanner_unlock_password` anahtarıyla saklanır.
+
+> 🔒 Artık kalıcı sunucu kilidi yok; bu sayede arayüz daha hızlı ve stabil.  
+> Parola yine sunucuda doğrulanır.
 
 ---
 
 ## 🧩 Hızlı Sorun Giderme
-- 🖥️ **Sayfa görünmüyor:** `reload-doc` → `bench --site your.site reload-doc "QR Scanner" page qr_scanner`  
-- 🔑 **Yetki hatası:** Rol atamalarını kontrol edin (System Manager / QR Scanner User).   
-- 🔁 **Duplicate beklediğim gibi değil:** `qr_code` alanında UNIQUE index ve API’de race-safe insert olduğundan emin olun.
+| Sorun | Çözüm |
+|--------|--------|
+| Sayfa görünmüyor | `bench reload-doc "QR Scanner" page qr_scanner` |
+| Yetki hatası | Rolleri kontrol edin: System Manager, QR Scanner User, QR Scanner Manager |
+| Duplicate çalışmıyor | `qr_code` alanında UNIQUE index olduğundan emin olun |
+| Kilit açılmıyor | `qr_scanner_unlock_password` değerini kontrol edin |
+| Kilitten sonra tarama duruyor | Güncel JS sürümünü kullanın; parola alanı artık temizleniyor |
 
 ---
 
-## 🗺️ Feature Olarak Eklenecekler (Roadmap)
+## 🗺️ Yol Haritası
 1. **⚙️ QR Scanner Settings (Single DocType)**  
-   Panelden yönetilecek ayarlar:  
-   `success_toast_ms`, `duplicate_sticky`, `beep_enabled`, `vibrate_enabled`, `debounce_ms`, `autofocus_back`.  
-   **API:** `qr_scanner.api.get_client_settings` ile JS varsayılanlarını server tarafından override edeceğiz.
-
+   Panelden yönetim: `success_toast_ms`, `beep_enabled`, `vibrate_enabled`, `debounce_ms`, `autofocus_back`, `silence_ms` vb.  
+   **API:** `qr_scanner.api.get_client_settings`
 2. **⚡ Enter’sız Otomatik Gönderim (USB “burst” algılama)**  
-   Barkod okuyucudan gelen hızlı tuş vuruşlarını algılayıp kısa bir **sessizlikte** otomatik gönderim.  
-   Ayarlanabilir eşikler: `silence_ms`, `min_len`, `burst_threshold_ms`, `burst_min_keys` (tercihen Settings üzerinden).
-
----
+   Kısa bir **sessizlik** penceresi sonrası otomatik gönderim (ayarlanabilir eşikler).
