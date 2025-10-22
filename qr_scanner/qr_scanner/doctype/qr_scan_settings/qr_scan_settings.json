@@ -1,0 +1,34 @@
+{
+  "doctype": "DocType",
+  "name": "QR Scan Settings",
+  "module": "QR Scanner",
+  "istable": 0,
+  "editable_grid": 0,
+  "quick_entry": 0,
+  "read_only": 0,
+  "track_changes": 1,
+  "is_submittable": 0,
+  "is_tree": 0,
+  "custom": 0,
+  "issingle": 1,
+  "permissions": [
+    { "role": "System Manager",     "read": 1, "write": 1 },
+    { "role": "QR Scanner Manager", "read": 1, "write": 1 },
+    { "role": "QR Scanner User",    "read": 1 }
+  ],
+  "fields": [
+    { "fieldname": "sec_ui", "label": "UI", "fieldtype": "Section Break" },
+
+    { "fieldname": "success_toast_ms", "label": "Success Toast (ms)", "fieldtype": "Int", "default": "1500" },
+    { "fieldname": "beep_enabled",     "label": "Beep Enabled",       "fieldtype": "Check", "default": "1" },
+    { "fieldname": "vibrate_enabled",  "label": "Vibrate Enabled",    "fieldtype": "Check", "default": "1" },
+    { "fieldname": "debounce_ms",      "label": "Debounce (ms)",      "fieldtype": "Int", "default": "800" },
+    { "fieldname": "autofocus_back",   "label": "Auto Focus Back",    "fieldtype": "Check", "default": "1" },
+    { "fieldname": "silence_ms",       "label": "Burst Silence (ms)", "fieldtype": "Int", "default": "120" },
+
+    { "fieldname": "sec_lock", "label": "Lock & Security", "fieldtype": "Section Break" },
+
+    { "fieldname": "lock_on_duplicate", "label": "Lock on Duplicate", "fieldtype": "Check", "default": "1" },
+    { "fieldname": "unlock_password",   "label": "Unlock Password",   "fieldtype": "Password" }
+  ]
+}
