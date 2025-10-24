@@ -1,15 +1,18 @@
+import os
 import frappe
+from frappe.modules.import_file import import_file_by_path
+
 
 def _reload_all():
-    # Desk Page
+    # Not: reload_doc 'module' paramı app package adıdır (qr_scanner)
     try:
-        frappe.reload_doc("QR Scanner", "page", "qr_scanner")
+        frappe.reload_doc("qr_scanner", "page", "qr_scanner")
     except Exception:
         frappe.log_error("reload page qr_scanner failed", "qr_scanner")
 
     # Single DocType
     try:
-        frappe.reload_doc("QR Scanner", "doctype", "qr_scan_settings")
+        frappe.reload_doc("qr_scanner", "doctype", "qr_scan_settings")
     except Exception:
         frappe.log_error("reload doctype qr_scan_settings failed", "qr_scanner")
 
@@ -23,8 +26,13 @@ def _ensure_roles():
     required = ["QR Scanner User", "QR Scanner Manager"]
     for role in required:
         if not frappe.db.exists("Role", role):
-            doc = frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 1})
+            doc = frappe.get_doc({
+                "doctype": "Role",
+                "role_name": role,
+                "desk_access": 1
+            })
             doc.insert(ignore_permissions=True)
+    frappe.db.commit()
 
 
 def _ensure_settings_defaults():
@@ -50,18 +58,39 @@ def _ensure_settings_defaults():
                 dirty = True
         if dirty:
             doc.save(ignore_permissions=True)
+            frappe.db.commit()
     except Exception:
         frappe.log_error("ensure settings defaults failed", "qr_scanner")
+
+
+def _import_workspace_json():
+    """
+    Uygulama ile ship edilen workspace JSON'unu (qr_scanner.json) içe alır.
+    Dosya yoksa sessizce geçer. Mevcut kaydı günceller.
+    """
+    try:
+        path = frappe.get_app_path("qr_scanner", "qr_scanner", "workspace", "qr_scanner.json")
+        if os.path.exists(path):
+            import_file_by_path(
+                path,
+                ignore_version=True,
+                reset_permissions=False,
+                for_sync=True,          # migrate/install senkronizasyonu gibi davran
+            )
+            frappe.db.commit()
+    except Exception:
+        frappe.log_error("import workspace json failed", "qr_scanner")
 
 
 def after_install():
     _reload_all()
     _ensure_roles()               # istersen yorumlayabilirsin
     _ensure_settings_defaults()
+    _import_workspace_json()      # Workspace'i içe al
 
 
 def after_migrate():
     _reload_all()
-    # migrate sonrası da varsayılanları ve rollerin varlığını garantiye al
     _ensure_roles()               # istersen yorumlayabilirsin
     _ensure_settings_defaults()
+    _import_workspace_json()      # migrate sonrası güncel workspace'i içe al

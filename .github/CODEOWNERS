@@ -1,0 +1,24 @@
+# .github/CODEOWNERS  (tercih edilen konum) 
+# veya /CODEOWNERS (repo kökü)
+
+# Kritik kurulum & workspace içe alma mantığı
+/qr_scanner/install.py                                   @KTA-Endustri-Sistemleri/dev @ufukkaramalli
+/qr_scanner/qr_scanner/workspace/qr_scanner.json         @KTA-Endustri-Sistemleri/dev @ufukkaramalli
+
+# QR Scan Settings (Single DocType ve ilgili kaynaklar)
+/qr_scanner/qr_scanner/doctype/qr_scan_settings/**       @KTA-Endustri-Sistemleri/dev @ufukkaramalli
+
+# Uygulama geneli (modül, sayfa, client/server scriptler)
+/qr_scanner/**                                           @KTA-Endustri-Sistemleri/dev
+
+# Testler
+/tests/**                                                @KTA-Endustri-Sistemleri/dev
+
+# Dokümantasyon
+/docs/**                                                 @KTA-Endustri-Sistemleri/dev
+
+# GitHub iş akışları ve meta
+/.github/**                                              @KTA-Endustri-Sistemleri/dev
+
+# Varsayılan (eşleşmeyen her şey)
+*                                                        @KTA-Endustri-Sistemleri/dev

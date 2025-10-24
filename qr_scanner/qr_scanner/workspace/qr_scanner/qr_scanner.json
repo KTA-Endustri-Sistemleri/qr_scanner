@@ -1,0 +1,75 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"VIXmNmka_8\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">QR Scanner</span>\",\"col\":12}},{\"id\":\"lR0wc7jLAm\",\"type\":\"card\",\"data\":{\"card_name\":\"Shortcuts\",\"col\":3}},{\"id\":\"7EVPojr3UC\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Settings</b></span>\",\"col\":12}},{\"id\":\"UMuFS2dwli\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"QR Scanner Settings\",\"col\":3}}]",
+ "creation": "2025-10-24 14:58:41.378525",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "scan",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "QR Scanner",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Shortcuts",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "QR Scanner",
+   "link_count": 0,
+   "link_to": "qr_scanner",
+   "link_type": "Page",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Scanned QR Codes List",
+   "link_count": 0,
+   "link_to": "QR Scan Record",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "module": "QR Scanner",
+ "name": "QR Scanner",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "QR Scanner User"
+  },
+  {
+   "role": "QR Scanner Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 18.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "QR Scanner Settings",
+   "link_to": "QR Scan Settings",
+   "type": "DocType"
+  }
+ ],
+ "title": "QR Scanner"
+}
