@@ -1,25 +1,24 @@
-# CODEOWNERS
-# En son eşleşen kural kazanır. Sıralamayı önemli dosyalar en üstte olacak şekilde koru.
+# .github/CODEOWNERS  (tercih edilen konum) 
+# veya /CODEOWNERS (repo kökü)
 
-# 🔒 Kritik kurulum & workspace içe alma mantığı
-/qr_scanner/install.py                                   @ufukkaramalli @KTA-Endustri-Sistemleri/qr-scanner-maintainers
-/qr_scanner/qr_scanner/workspace/qr_scanner.json         @ufukkaramalli @KTA-Endustri-Sistemleri/qr-scanner-maintainers
+# Kritik kurulum & workspace içe alma mantığı
+/qr_scanner/install.py                                   @KTA-Endustri-Sistemleri/dev @ufukkaramalli
+/qr_scanner/qr_scanner/workspace/qr_scanner.json         @KTA-Endustri-Sistemleri/dev @ufukkaramalli
 
-# 🧩 QR Scan Settings (Single DocType ve ilişkili Python/JS)
-/qr_scanner/qr_scanner/doctype/qr_scan_settings/**       @ufukkaramalli @KTA-Endustri-Sistemleri/qr-scanner-maintainers
+# QR Scan Settings (Single DocType ve ilgili kaynaklar)
+/qr_scanner/qr_scanner/doctype/qr_scan_settings/**       @KTA-Endustri-Sistemleri/dev @ufukkaramalli
 
-# 🧰 App genel kaynakları (modül, sayfa, client script, server script)
-/qr_scanner/**                                           @KTA-Endustri-Sistemleri/qr-scanner-maintainers
+# Uygulama geneli (modül, sayfa, client/server scriptler)
+/qr_scanner/**                                           @KTA-Endustri-Sistemleri/dev
 
-# 🧪 Testler
-/tests/**                                                @KTA-Endustri-Sistemleri/qa
-/*.pyi                                                   @KTA-Endustri-Sistemleri/qa
+# Testler
+/tests/**                                                @KTA-Endustri-Sistemleri/dev
 
-# 📚 Dokümantasyon
-/docs/**                                                 @KTA-Endustri-Sistemleri/docs
+# Dokümantasyon
+/docs/**                                                 @KTA-Endustri-Sistemleri/dev
 
-# 🛠️ CI/CD, GitHub iş akışları ve meta
-/.github/**                                              @KTA-Endustri-Sistemleri/devops
+# GitHub iş akışları ve meta
+/.github/**                                              @KTA-Endustri-Sistemleri/dev
 
-# 🎯 Varsayılan sahipler (diğer her şey)
-*                                                       @KTA-Endustri-Sistemleri/qr-scanner-maintainers
+# Varsayılan (eşleşmeyen her şey)
+*                                                        @KTA-Endustri-Sistemleri/dev
