@@ -1,0 +1,25 @@
+# CODEOWNERS
+# En son eşleşen kural kazanır. Sıralamayı önemli dosyalar en üstte olacak şekilde koru.
+
+# 🔒 Kritik kurulum & workspace içe alma mantığı
+/qr_scanner/install.py                                   @ufukkaramalli @KTA-Endustri-Sistemleri/qr-scanner-maintainers
+/qr_scanner/qr_scanner/workspace/qr_scanner.json         @ufukkaramalli @KTA-Endustri-Sistemleri/qr-scanner-maintainers
+
+# 🧩 QR Scan Settings (Single DocType ve ilişkili Python/JS)
+/qr_scanner/qr_scanner/doctype/qr_scan_settings/**       @ufukkaramalli @KTA-Endustri-Sistemleri/qr-scanner-maintainers
+
+# 🧰 App genel kaynakları (modül, sayfa, client script, server script)
+/qr_scanner/**                                           @KTA-Endustri-Sistemleri/qr-scanner-maintainers
+
+# 🧪 Testler
+/tests/**                                                @KTA-Endustri-Sistemleri/qa
+/*.pyi                                                   @KTA-Endustri-Sistemleri/qa
+
+# 📚 Dokümantasyon
+/docs/**                                                 @KTA-Endustri-Sistemleri/docs
+
+# 🛠️ CI/CD, GitHub iş akışları ve meta
+/.github/**                                              @KTA-Endustri-Sistemleri/devops
+
+# 🎯 Varsayılan sahipler (diğer her şey)
+*                                                       @KTA-Endustri-Sistemleri/qr-scanner-maintainers
