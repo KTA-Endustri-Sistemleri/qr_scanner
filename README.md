@@ -23,20 +23,24 @@ bench build && bench restart
 - Open the **QR Scanner** page: `https://your.site/app/qr-scanner`  
 - Scan with a **USB keyboard-wedge** scanner or type manually and press **Enter**.  
 - Feedback:
-  - ✅ **Success** → green toast (auto-closes after ~1–2s)  
+  - ✅ **Success** → full-card **green overlay** (uses `success_toast_ms`)  
+  - 🔄 **Processing** → full-card **blue overlay** (uses `ui_cooldown_ms`)  
   - 🔁 **Duplicate** → fullscreen **red lock** appears; enter the admin password to continue.
 
 **Quality of life**
 - Input auto-refocuses when it loses focus  
 - Repeated quick scans are ignored (**debounce**)  
 - After unlocking: input re-enables and state resets  
-- Password field is always **cleared** (autofill disabled)
+- Password field is always **cleared** (autofill disabled)  
+- New: No more floating toasts — all visual feedback is now rendered *inside the card*  
+- New: Overlays are **opaque** and block input interactions completely
 
 ---
 
 ## ⚙️ QR Scan Settings (Single DocType)
 Centralized configuration for all client behaviors:
-- `success_toast_ms` → Toast duration  
+- `success_toast_ms` → Success overlay duration  
+- `ui_cooldown_ms` → Loading overlay duration  
 - `beep_enabled`, `vibrate_enabled` → Enable/disable audio or vibration feedback  
 - `debounce_ms` → Minimum interval between scans  
 - `autofocus_back` → Auto-focus on the input field  
@@ -85,3 +89,4 @@ You can still customize Doctype and API permissions as needed.
 | Lock not opening | Check `lock_on_duplicate` in settings |
 | No password set | Fill in the `Unlock Password` in QR Scan Settings |
 | Scanner stuck after lock | Update JS — password input now resets correctly |
+| Overlay too fast | Adjust `ui_cooldown_ms` or `success_toast_ms` in settings |
