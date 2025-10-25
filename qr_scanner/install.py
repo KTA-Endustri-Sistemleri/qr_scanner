@@ -50,6 +50,9 @@ def _ensure_settings_defaults():
             "autofocus_back": 1,
             "silence_ms": 120,
             "lock_on_duplicate": 1,
+            # YENİ: UI Loading / Cooldown
+            "loading_enabled": 1,
+            "ui_cooldown_ms": 1000,
         }
         dirty = False
         for k, v in defaults.items():

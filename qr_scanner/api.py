@@ -19,6 +19,9 @@ def get_client_settings():
         "autofocus_back": 1,
         "silence_ms": 120,
         "lock_on_duplicate": 1,
+        # YENİ: UI Loading / Cooldown
+        "loading_enabled": 1,
+        "ui_cooldown_ms": 1000,
     }
 
     try:
@@ -28,8 +31,10 @@ def get_client_settings():
         # Beklenmeyen tipler için defansif merge
         if not isinstance(data, dict):
             return defaults
-        # defaults üzerinde gelenleri uygula
-        defaults.update({k: data.get(k) for k in defaults.keys() if k in data})
+        # defaults üzerinde gelenleri uygula (bilinmeyen anahtarları görmezden gel)
+        for k in defaults.keys():
+            if k in data and data.get(k) is not None:
+                defaults[k] = data.get(k)
         return defaults
     except Exception:
         # Buraya düşüyorsa ya import yolu hatalıdır ya da DocType henüz migrate edilmemiştir

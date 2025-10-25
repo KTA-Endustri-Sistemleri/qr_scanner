@@ -25,6 +25,8 @@
     { "fieldname": "debounce_ms",      "label": "Debounce (ms)",      "fieldtype": "Int", "default": "800" },
     { "fieldname": "autofocus_back",   "label": "Auto Focus Back",    "fieldtype": "Check", "default": "1" },
     { "fieldname": "silence_ms",       "label": "Burst Silence (ms)", "fieldtype": "Int", "default": "120" },
+    { "fieldname": "loading_enabled",  "label": "Loading Enabled",    "fieldtype": "Check", "default": "1", "description": "Input girişinden sonra kısa süreli loading/cooldown uygula" },
+    { "fieldname": "ui_cooldown_ms",   "label": "UI Cooldown (ms)",   "fieldtype": "Int", "default": "1000", "description": "Input’u bu süre boyunca kilitle (ms)" },
 
     { "fieldname": "sec_lock", "label": "Lock & Security", "fieldtype": "Section Break" },
 
