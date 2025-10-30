@@ -24,7 +24,10 @@ def get_cached_settings():
             "debounce_ms":      int(doc.get("debounce_ms") or 800),
             "autofocus_back":   1 if doc.get("autofocus_back") else 0,
             "silence_ms":       int(doc.get("silence_ms") or 120),
-            "lock_on_duplicate":1 if doc.get("lock_on_duplicate") else 0
+            "lock_on_duplicate":1 if doc.get("lock_on_duplicate") else 0,
+            # YENİ: UI Loading / Cooldown
+            "loading_enabled":  1 if doc.get("loading_enabled") else 0,
+            "ui_cooldown_ms":   int(doc.get("ui_cooldown_ms") or 1000),
         }
         cache.set_value(CACHE_KEY, safe, expires_in_sec=60)
         data = safe

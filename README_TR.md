@@ -23,7 +23,8 @@ bench build && bench restart
 - Desk’te **QR Scanner** sayfasını açın: `https://your.site/app/qr-scanner`  
 - **USB tarayıcı** ile okutun veya elle yazıp **Enter**’a basın.  
 - Geri bildirim:
-  - ✅ **Başarılı** → yeşil toast (1–2 sn sonra kapanır)
+  - 🔄 **İşlem yapılıyor** → kart üzerinde **mavi opak katman** (süre: `ui_cooldown_ms`)  
+  - ✅ **Kayıt edildi** → kart üzerinde **yeşil opak katman** (süre: `success_toast_ms`)  
   - 🔁 **Duplicate** → tam ekran **kırmızı kilit** açılır; parola girilmesi gerekir.
 
 **Kullanım kolaylıkları**
@@ -31,12 +32,15 @@ bench build && bench restart
 - Aynı kod kısa aralıkla gelirse yoksayılır (**debounce**).  
 - Kilit açıldıktan sonra alan yeniden aktifleşir, dahili durum sıfırlanır.  
 - Parola kutusu her seferinde **boş gelir**, autofill devre dışıdır.  
+- Artık toast yok — tüm görsel geri bildirimler **kartın içinde** gösterilir.  
+- Overlay’ler **opak** olup arka planı tamamen gizler ve tıklamaları engeller.
 
 ---
 
 ## ⚙️ QR Scan Settings (Single DocType)
 Tüm istemci davranışlarını tek panelden yönetebilirsiniz:
-- `success_toast_ms` → Başarılı mesaj süresi  
+- `success_toast_ms` → Kayıt edildi ekranı süresi  
+- `ui_cooldown_ms` → İşlem yapılıyor ekranı süresi  
 - `beep_enabled`, `vibrate_enabled` → Ses/Titreşim kontrolü  
 - `debounce_ms` → Taramalar arası minimum süre  
 - `autofocus_back` → Tarayıcı alanına otomatik odaklanma  
@@ -83,3 +87,4 @@ Tüm istemci davranışlarını tek panelden yönetebilirsiniz:
 | Parola ekranı açılmıyor | `lock_on_duplicate` ayarını kontrol edin |
 | Parola tanımlı değil | QR Scan Settings → Unlock Password alanını doldurun |
 | Kilitten sonra tarama duruyor | Güncel JS sürümünü kullanın; parola alanı artık sıfırlanıyor |
+| Overlay çok hızlı kayboluyor | `ui_cooldown_ms` veya `success_toast_ms` ayarlarını güncelleyin |
