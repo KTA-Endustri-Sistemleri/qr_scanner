@@ -14,6 +14,10 @@
       this.toSuccessTimer = null;
       this.successHideTimer = null;
 
+      // unlock flow guard
+      this.unlockBusy = false;
+      this.unlockWatchdog = null;
+
       // Cached model/label
       this.cachedModel = null;
 
@@ -73,7 +77,7 @@
           .qr-overlay{
             position:absolute; inset:0; z-index:1;
             border-radius: inherit; display:none;
-            pointer-events: all; /* prevent clicks to input below */
+            pointer-events: none; /* default: never block clicks when hidden */
           }
           .qr-overlay .qr-overlay-content{
             display:flex; flex-direction:column; justify-content:center; align-items:center;
@@ -89,7 +93,7 @@
           .qr-overlay.success{ background:#166534; color:#ffffff; }  /* green-800 */
           .qr-overlay.success .qr-dot-ok{ width:12px; height:12px; border-radius:50%; background:#ffffff; }
 
-          /* NEW: Warning overlay (same structure as success; amber palette) */
+          /* Warning overlay */
           .qr-overlay.warning{ background:#92400e; color:#ffffff; }  /* amber-800 */
           .qr-overlay.warning .qr-dot-ok{ width:12px; height:12px; border-radius:50%; background:#ffffff; }
 
@@ -146,7 +150,7 @@
               </div>
             </div>
 
-            <!-- OPAQUE WARNING (NEW) -->
+            <!-- OPAQUE WARNING -->
             <div id="overlayWarn" class="qr-overlay warning" aria-hidden="true">
               <div class="qr-overlay-content" aria-live="polite">
                 <div class="qr-dot-ok" aria-hidden="true"></div>
@@ -192,7 +196,7 @@
 
     // ---------- Events ----------
     bindEvents() {
-      // Enter ile gönder
+      // Enter to submit code
       this.$manual.addEventListener('keydown', (e) => {
         if (this.isLocked || this.inFlight) { e.preventDefault(); return; }
         if (e.key === 'Enter') {
@@ -203,19 +207,34 @@
         }
       });
 
-      // Odak kaybı → geri odakla (ayar bağlı)
+      // Autofocus back
       this.$manual.addEventListener('blur', () => {
         if (this.CFG.autofocus_back && !this.isLocked && !this.inFlight) {
           setTimeout(() => this.$manual.focus(), 50);
         }
       });
 
-      // Lock form submit
+      // Lock form submit (hardened)
       this.$lockForm.addEventListener('submit', (e) => {
         e.preventDefault();
+        if (this.unlockBusy) return; // guard double submit
         const pw = (this.$lockInput.value || '').trim();
         if (!pw) { this.showLockError('Password cannot be empty.'); return; }
-        this.$lockBtn.setAttribute('disabled', 'disabled');
+
+        // mark busy and ensure button clickable state is consistent
+        this.unlockBusy = true;
+        this.$lockBtn.removeAttribute('disabled');
+        this.$lockBtn.setAttribute('aria-busy', 'true');
+
+        // start watchdog (re-enable in case of a stalled promise)
+        this.unlockWatchdog && clearTimeout(this.unlockWatchdog);
+        this.unlockWatchdog = setTimeout(() => {
+          this.unlockBusy = false;
+          this.$lockBtn.removeAttribute('disabled');
+          this.$lockBtn.removeAttribute('aria-busy');
+        }, 10000); // 10s safety
+
+        // do request
         const req = frappe.call({ method: 'qr_scanner.api.verify_unlock_password', args: { password: pw } });
         req.then((r) => {
           const m = r.message || {};
@@ -233,10 +252,16 @@
           this.showLockError('Server unreachable.');
           this.$lockInput.value = '';
           this.beep(220, 160); this.vibrate(90);
-        }).finally(() => this.$lockBtn.removeAttribute('disabled'));
+        }).finally(() => {
+          this.unlockBusy = false;
+          this.$lockBtn.removeAttribute('aria-busy');
+          this.$lockBtn.removeAttribute('disabled');
+          this.unlockWatchdog && clearTimeout(this.unlockWatchdog);
+          this.unlockWatchdog = null;
+        });
       });
 
-      // İlk açılışta devam eden kilit varsa sürdür
+      // Restore lock if persisted
       try {
         const ls = localStorage.getItem('qr_lock');
         if (ls) this.engageLock(ls);
@@ -253,9 +278,13 @@
 
     // ---------- Overlays ----------
     showOverlay(el) {
-      if (this.$overlayLoading) this.$overlayLoading.style.display = (el === this.$overlayLoading) ? 'block' : 'none';
-      if (this.$overlaySuccess) this.$overlaySuccess.style.display = (el === this.$overlaySuccess) ? 'block' : 'none';
-      if (this.$overlayWarn) this.$overlayWarn.style.display = (el === this.$overlayWarn) ? 'block' : 'none';
+      const arr = [this.$overlayLoading, this.$overlaySuccess, this.$overlayWarn];
+      for (const o of arr) {
+        if (!o) continue;
+        const show = (o === el);
+        o.style.display = show ? 'block' : 'none';
+        o.style.pointerEvents = show ? 'all' : 'none';
+      }
     }
     setIdle() {
       this.showOverlay(null);
@@ -297,7 +326,6 @@
       }, remaining);
     }
     scheduleWarning(msg) {
-      // Show warning immediately and return to idle after same duration as success_toast_ms
       const dur = Number(this.CFG.success_toast_ms || 1500);
       this.setWarning(msg);
       if (this.successHideTimer) clearTimeout(this.successHideTimer);
@@ -315,8 +343,17 @@
 
     // ---------- Lock ----------
     engageLock(reason) {
-      this.abortToIdle();
+      // Ensure nothing blocks the lock UI
+      this.abortToIdle(); // clears overlays & inFlight
       this.isLocked = true;
+
+      // Make absolutely sure the Unlock button is clickable
+      if (this.$lockBtn) {
+        this.$lockBtn.removeAttribute('disabled');
+        this.$lockBtn.removeAttribute('aria-busy');
+        this.$lockBtn.style.pointerEvents = 'auto';
+      }
+
       if (this.$manual) this.$manual.setAttribute('disabled', 'disabled');
       if (this.$lockDesc) {
         this.$lockDesc.textContent = (reason === 'duplicate')
@@ -338,6 +375,16 @@
       if (this.$lock) this.$lock.classList.remove('show');
       if (this.$manual) { this.$manual.removeAttribute('disabled'); this.$manual.value = ''; }
       this.lastCode = ''; this.lastTime = 0; this.inFlight = false;
+
+      // Clean unlock state
+      this.unlockBusy = false;
+      this.unlockWatchdog && clearTimeout(this.unlockWatchdog);
+      this.unlockWatchdog = null;
+      if (this.$lockBtn) {
+        this.$lockBtn.removeAttribute('disabled');
+        this.$lockBtn.removeAttribute('aria-busy');
+      }
+
       try { localStorage.removeItem('qr_lock'); } catch (_) {}
       this.setIdle();
     }
@@ -480,7 +527,7 @@
       if (code === this.lastCode && (now - this.lastTime) < (this.CFG.debounce_ms || 800)) return;
       this.lastCode = code; this.lastTime = now;
 
-      // HOTFIX#2: client-side 33-char enforcement
+      // Client-side 33-char enforcement
       if ((code || '').length !== 33) {
         this.beep(300, 140); this.vibrate(90);
         this.scheduleWarning('Code must be exactly 33 characters. Please rescan.');
@@ -506,7 +553,6 @@
           this.beep(900, 110); this.vibrate(40);
           this.scheduleSuccess(m.name);
         } else if (m.reason === 'invalid_length') {
-          // server-side guard (should rarely hit if client validated)
           this.beep(300, 140); this.vibrate(90);
           this.scheduleWarning('Code must be exactly 33 characters. Please rescan.');
         } else if (m.reason === 'duplicate') {
