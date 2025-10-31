@@ -1,4 +1,4 @@
-// --- QR Scanner – Class-based, encapsulated state & UI ---
+// --- QR Scanner – Class-based; background device label & model detection (no UI fields) ---
 (() => {
   class QRScannerPage {
     constructor(wrapper) {
@@ -13,6 +13,9 @@
       this.cooldownEndsAt = 0;
       this.toSuccessTimer = null;
       this.successHideTimer = null;
+
+      // Cached model/label
+      this.cachedModel = null;
 
       // Defaults (server overrides via get_client_settings)
       this.CFG = {
@@ -32,6 +35,10 @@
       this.cacheDom();
       this.bindEvents();
       this.fetchSettings();
+
+      // Prepare device model/label in background
+      this.ensureBackgroundDeviceIdentity();
+
       this.setIdle();
     }
 
@@ -62,17 +69,16 @@
             .qr-input{ background:#0f172a; color:#e5e7eb; border-color:#243042; }
           }
 
-          /* O P A Q U E  overlays */
+          /* O P A Q U E overlays (card içini tamamen kaplar) */
           .qr-overlay{
             position:absolute; inset:0; z-index:1;
             border-radius: inherit; display:none;
-            pointer-events: all;
+            pointer-events: all; /* alttaki input'a tıklanmasın */
           }
           .qr-overlay .qr-overlay-content{
             display:flex; flex-direction:column; justify-content:center; align-items:center;
             text-align:center; width:100%; height:100%; gap:8px; font-weight:600; padding:18px; color:inherit;
           }
-
           .qr-overlay.loading{ background:#1e40af; color:#ffffff; }  /* blue-800 */
           .qr-overlay.loading .qr-spinner{
             width:18px; height:18px; border:2px solid rgba(255,255,255,.35);
@@ -108,7 +114,7 @@
                 <input id="manual" type="text" class="form-control qr-input"
                        placeholder="Scan with USB scanner or type and press Enter" autofocus />
               </div>
-              <div class="qr-help">States are shown as opaque overlays inside the card. On duplicate, a red lock requires admin password.</div>
+              <div class="qr-help">States are displayed as opaque overlays inside the card. On duplicate, a red lock requires admin password.</div>
             </div>
 
             <!-- OPAQUE LOADING -->
@@ -186,10 +192,7 @@
       this.$lockForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const pw = (this.$lockInput.value || '').trim();
-        if (!pw) {
-          this.showLockError('Password cannot be empty.');
-          return;
-        }
+        if (!pw) { this.showLockError('Password cannot be empty.'); return; }
         this.$lockBtn.setAttribute('disabled', 'disabled');
         const req = frappe.call({ method: 'qr_scanner.api.verify_unlock_password', args: { password: pw } });
         req.then((r) => {
@@ -209,7 +212,6 @@
           this.$lockInput.value = '';
           this.beep(220, 160); this.vibrate(90);
         }).finally(() => this.$lockBtn.removeAttribute('disabled'));
-
       });
 
       // İlk açılışta devam eden kilit varsa sürdür
@@ -308,7 +310,26 @@
       if (this.$lockError) { this.$lockError.textContent = msg || 'Error'; this.$lockError.style.display = 'block'; }
     }
 
-    // ---------- Device/Client Meta ----------
+    // ---------- Background device identity ----------
+    ensureBackgroundDeviceIdentity() {
+      // Ensure device label exists
+      this.getOrCreateDeviceLabel();
+      // Cache model now
+      this.cachedModel = this.deriveDeviceModelFromUA();
+      // Try UA-CH high entropy (Android Chromium) for better model; store for next scans
+      this.getHighEntropyModelIfAny().then((m) => {
+        if (m) {
+          this.cachedModel = m;
+          try { localStorage.setItem('qr_device_model_he', m); } catch (_) {}
+        }
+      }).catch(() => {});
+      // If we ever stored a better model before, prefer it
+      try {
+        const saved = localStorage.getItem('qr_device_model_he');
+        if (saved) this.cachedModel = saved;
+      } catch (_) {}
+    }
+
     getOrCreateDeviceUUID() {
       const KEY = 'qr_scanner_device_uuid';
       try {
@@ -325,15 +346,77 @@
         return null;
       }
     }
-    collectClientMeta(inputMethod) {
+
+    // No-UI device label: generate once and persist (human-friendly)
+    getOrCreateDeviceLabel() {
+      const KEY = 'qr_device_label';
+      try {
+        let label = localStorage.getItem(KEY);
+        if (label) return label;
+
+        // Build a readable label: OS/Model + short id
+        const model = this.deriveDeviceModelFromUA() || 'Device';
+        const short = (this.getOrCreateDeviceUUID() || 'xxxxxxxx').slice(0, 8);
+        label = `${model.replace(/\s+/g, '-')}-${short}`;
+        localStorage.setItem(KEY, label);
+        return label;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // Chromium (Android) high-entropy model (async, best-effort)
+    async getHighEntropyModelIfAny() {
+      try {
+        const ua = navigator.userAgentData;
+        if (ua && ua.getHighEntropyValues) {
+          const res = await ua.getHighEntropyValues(['platform', 'model']);
+          if (res && res.model) return res.model;
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    // UA’dan makul model (hemen, sync)
+    deriveDeviceModelFromUA() {
+      const ua = navigator.userAgent || '';
+      // OS
+      let os = /Windows NT/i.test(ua) ? 'Windows'
+            : /Mac OS X/i.test(ua)    ? 'macOS'
+            : /Android/i.test(ua)     ? 'Android'
+            : /iPhone|iPad|iOS/i.test(ua) ? 'iOS'
+            : /Linux/i.test(ua)       ? 'Linux'
+            : 'Other';
+      // Browser
+      let br = /Edg\//.test(ua) ? 'Edge'
+             : /Chrome\//.test(ua) && !/Chromium/.test(ua) ? 'Chrome'
+             : /Safari\//.test(ua) && !/Chrome\//.test(ua) ? 'Safari'
+             : /Firefox\//.test(ua) ? 'Firefox'
+             : 'Browser';
+
+      // Android: bazı UA’larda “... Android 13; Pixel 7 Build/TQ3A...” → Pixel 7 yakala
+      if (os === 'Android') {
+        const m = ua.match(/Android [^;]*;?\s*([^;)]*?)\s+Build\//i);
+        if (m && m[1]) return `Android ${m[1].trim()}`;
+      }
+      if (os === 'iOS') {
+        if (/iPad/i.test(ua)) return 'iPad';
+        if (/iPhone/i.test(ua)) return 'iPhone';
+        return 'iOS Device';
+      }
+      return `${os} ${br}`;
+    }
+
+    // ---------- Device/Client Meta ----------
+    collectClientMeta() {
       const nav = window.navigator || {};
       const scr = window.screen || {};
       return {
-        input_method: inputMethod || 'USB Scanner',
+        input_method: 'USB Scanner',                       // mevcut akış (manuel ayrımı istenirse sonra ekleriz)
         device_uuid: this.getOrCreateDeviceUUID(),
-        device_label: null,
+        device_label: this.getOrCreateDeviceLabel(),       // << arka planda üretildi
         device_vendor: nav.vendor || null,
-        device_model: null,
+        device_model: this.cachedModel || this.deriveDeviceModelFromUA(),  // << sync + he varsa sonraki kayıtlarda
         client_platform: nav.platform || null,
         client_lang: nav.language || null,
         client_hw_threads: (typeof nav.hardwareConcurrency === 'number') ? nav.hardwareConcurrency : null,
@@ -371,7 +454,7 @@
         args: {
           qr_code: code,
           scanned_via: 'USB Scanner',
-          client_meta: this.collectClientMeta('USB Scanner')
+          client_meta: this.collectClientMeta()
         }
       });
 
