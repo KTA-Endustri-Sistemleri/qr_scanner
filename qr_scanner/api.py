@@ -129,6 +129,10 @@ def create_scan(qr_code, scanned_via="USB Scanner", device_id=None, client_meta=
     if not qr_code:
         frappe.throw(_("Empty QR code"))
 
+    # HOTFIX#2: 33 karakter zorunluluğu (server-side guard)
+    if len(qr_code) != 33:
+        return {"ok": False, "created": False, "reason": "invalid_length", "msg": _("QR code must be exactly 33 characters.")}
+
     # client_meta JSON string geldiyse parse et
     if isinstance(client_meta, str):
         try:
@@ -177,7 +181,6 @@ def create_scan(qr_code, scanned_via="USB Scanner", device_id=None, client_meta=
             "client_user_agent": client_meta.get("client_user_agent"),
             "ip_address": ip_addr,
 
-            # İstersen ham blob'u da tutabilirsin:
             # "metadata": json.dumps(client_meta, ensure_ascii=False)
         })
         doc.insert(ignore_permissions=True)

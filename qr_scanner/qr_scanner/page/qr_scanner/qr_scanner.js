@@ -19,7 +19,7 @@
 
       // Defaults (server overrides via get_client_settings)
       this.CFG = {
-        success_toast_ms: 1500, // success overlay visibility
+        success_toast_ms: 1500, // success/warn overlay visibility
         beep_enabled: 1,
         vibrate_enabled: 1,
         debounce_ms: 800,
@@ -73,7 +73,7 @@
           .qr-overlay{
             position:absolute; inset:0; z-index:1;
             border-radius: inherit; display:none;
-            pointer-events: all; /* alttaki input'a tıklanmasın */
+            pointer-events: all; /* prevent clicks to input below */
           }
           .qr-overlay .qr-overlay-content{
             display:flex; flex-direction:column; justify-content:center; align-items:center;
@@ -89,9 +89,14 @@
           .qr-overlay.success{ background:#166534; color:#ffffff; }  /* green-800 */
           .qr-overlay.success .qr-dot-ok{ width:12px; height:12px; border-radius:50%; background:#ffffff; }
 
+          /* NEW: Warning overlay (same structure as success; amber palette) */
+          .qr-overlay.warning{ background:#92400e; color:#ffffff; }  /* amber-800 */
+          .qr-overlay.warning .qr-dot-ok{ width:12px; height:12px; border-radius:50%; background:#ffffff; }
+
           @media (prefers-color-scheme: dark){
-            .qr-overlay.loading{ background:#1e3a8a; }
-            .qr-overlay.success{ background:#14532d; }
+            .qr-overlay.loading{ background:#1e3a8a; }  /* blue-900 */
+            .qr-overlay.success{ background:#14532d; }  /* green-900 */
+            .qr-overlay.warning{ background:#78350f; }  /* amber-900 */
           }
 
           /* Fullscreen Lock */
@@ -104,6 +109,12 @@
           .qr-lock-input{flex:1;padding:12px 14px;border-radius:10px;border:none;outline:none;font-size:1rem}
           .qr-lock-btn{padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600}
           .qr-lock-error{margin-top:10px;font-weight:600;display:none}
+
+          /* HOTFIX#1: viewport ≤420×720 → stack button under password, full width */
+          @media (max-width: 420px) and (max-height: 720px){
+            .qr-lock-form{flex-direction:column}
+            .qr-lock-btn{width:100%}
+          }
         </style>
 
         <div class="qr-container">
@@ -134,6 +145,15 @@
                 <div id="successDesc" class="qr-help" style="color:#fff;opacity:.9">Done.</div>
               </div>
             </div>
+
+            <!-- OPAQUE WARNING (NEW) -->
+            <div id="overlayWarn" class="qr-overlay warning" aria-hidden="true">
+              <div class="qr-overlay-content" aria-live="polite">
+                <div class="qr-dot-ok" aria-hidden="true"></div>
+                <div>Warning</div>
+                <div id="warnDesc" class="qr-help" style="color:#fff;opacity:.9">Code must be exactly 33 characters. Please rescan.</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -159,7 +179,9 @@
       this.$manual = document.getElementById('manual');
       this.$overlayLoading = document.getElementById('overlayLoading');
       this.$overlaySuccess = document.getElementById('overlaySuccess');
+      this.$overlayWarn = document.getElementById('overlayWarn');
       this.$successDesc = document.getElementById('successDesc');
+      this.$warnDesc = document.getElementById('warnDesc');
       this.$lock = document.getElementById('qrLock');
       this.$lockDesc = document.getElementById('qrLockDesc');
       this.$lockError = document.getElementById('qrLockError');
@@ -233,6 +255,7 @@
     showOverlay(el) {
       if (this.$overlayLoading) this.$overlayLoading.style.display = (el === this.$overlayLoading) ? 'block' : 'none';
       if (this.$overlaySuccess) this.$overlaySuccess.style.display = (el === this.$overlaySuccess) ? 'block' : 'none';
+      if (this.$overlayWarn) this.$overlayWarn.style.display = (el === this.$overlayWarn) ? 'block' : 'none';
     }
     setIdle() {
       this.showOverlay(null);
@@ -246,6 +269,11 @@
     setSuccess(name) {
       if (this.$successDesc) this.$successDesc.textContent = name ? ('Document: ' + name) : 'Done.';
       this.showOverlay(this.$overlaySuccess);
+      if (this.$manual) this.$manual.setAttribute('disabled', 'disabled');
+    }
+    setWarning(msg) {
+      if (this.$warnDesc) this.$warnDesc.textContent = msg || 'Code must be exactly 33 characters. Please rescan.';
+      this.showOverlay(this.$overlayWarn);
       if (this.$manual) this.$manual.setAttribute('disabled', 'disabled');
     }
 
@@ -267,6 +295,13 @@
         if (this.successHideTimer) clearTimeout(this.successHideTimer);
         this.successHideTimer = setTimeout(() => { this.setIdle(); this.inFlight = false; }, successMs);
       }, remaining);
+    }
+    scheduleWarning(msg) {
+      // Show warning immediately and return to idle after same duration as success_toast_ms
+      const dur = Number(this.CFG.success_toast_ms || 1500);
+      this.setWarning(msg);
+      if (this.successHideTimer) clearTimeout(this.successHideTimer);
+      this.successHideTimer = setTimeout(() => { this.setIdle(); this.inFlight = false; }, dur);
     }
     abortToIdle() {
       this.clearTimers();
@@ -412,11 +447,11 @@
       const nav = window.navigator || {};
       const scr = window.screen || {};
       return {
-        input_method: 'USB Scanner',                       // mevcut akış (manuel ayrımı istenirse sonra ekleriz)
+        input_method: 'USB Scanner',
         device_uuid: this.getOrCreateDeviceUUID(),
-        device_label: this.getOrCreateDeviceLabel(),       // << arka planda üretildi
+        device_label: this.getOrCreateDeviceLabel(),
         device_vendor: nav.vendor || null,
-        device_model: this.cachedModel || this.deriveDeviceModelFromUA(),  // << sync + he varsa sonraki kayıtlarda
+        device_model: this.cachedModel || this.deriveDeviceModelFromUA(),
         client_platform: nav.platform || null,
         client_lang: nav.language || null,
         client_hw_threads: (typeof nav.hardwareConcurrency === 'number') ? nav.hardwareConcurrency : null,
@@ -445,6 +480,13 @@
       if (code === this.lastCode && (now - this.lastTime) < (this.CFG.debounce_ms || 800)) return;
       this.lastCode = code; this.lastTime = now;
 
+      // HOTFIX#2: client-side 33-char enforcement
+      if ((code || '').length !== 33) {
+        this.beep(300, 140); this.vibrate(90);
+        this.scheduleWarning('Code must be exactly 33 characters. Please rescan.');
+        return;
+      }
+
       // 1) loading overlay
       this.startCooldown(this.CFG.ui_cooldown_ms);
 
@@ -463,6 +505,10 @@
         if (m.created) {
           this.beep(900, 110); this.vibrate(40);
           this.scheduleSuccess(m.name);
+        } else if (m.reason === 'invalid_length') {
+          // server-side guard (should rarely hit if client validated)
+          this.beep(300, 140); this.vibrate(90);
+          this.scheduleWarning('Code must be exactly 33 characters. Please rescan.');
         } else if (m.reason === 'duplicate') {
           if (this.CFG.lock_on_duplicate) this.engageLock('duplicate');
           else { frappe.show_alert({ message: 'Duplicate: already scanned.', indicator: 'red' }); this.abortToIdle(); }
