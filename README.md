@@ -5,6 +5,20 @@ On a **duplicate**, a **fullscreen red lock** appears — requires an **admin pa
 
 ---
 
+## 🆕 What's New in v1.2.0 (Summary)
+- **In-card opaque overlays** replace floating toasts:
+  - 🔄 **Processing** → blue overlay (duration from `ui_cooldown_ms`)
+  - ✅ **Saved** → green overlay (duration from `success_toast_ms`)
+  - ⚠️ **Warning** → amber overlay (e.g., invalid QR length)
+  - Overlays are fully opaque (no transparency) and **block input**, rendered *inside* the ERPNext card.
+- **State machine UI**: predictable transitions via `setIdle()`, `setLoading()`, `setSuccess()`, `setWarning()`.
+- **Small-screen lock UX** (≤ 420×720): password and unlock button stack vertically; unlock button is full-width.
+- **33‑char validation**: Client-side rejects codes that are not exactly **33 characters** with a warning overlay; server returns `invalid_length`.
+- **Device & client metadata**: Collected silently from the browser and stored per record (see *Metadata* below).
+- **Migration required**: DocType fields added; ensure UNIQUE index on `qr_code` (see *Migration*).
+
+---
+
 ## 🧰 Installation
 ```bash
 cd ~/frappe-bench
@@ -20,36 +34,78 @@ bench build && bench restart
 ---
 
 ## ▶️ Usage
-- Open the **QR Scanner** page: `https://your.site/app/qr-scanner`  
-- Scan with a **USB keyboard-wedge** scanner or type manually and press **Enter**.  
+- Open the **QR Scanner** page: `https://your.site/app/qr-scanner`
+- Scan with a **USB keyboard-wedge** scanner or type manually and press **Enter**.
 - Feedback:
-  - ✅ **Success** → full-card **green overlay** (uses `success_toast_ms`)  
-  - 🔄 **Processing** → full-card **blue overlay** (uses `ui_cooldown_ms`)  
-  - 🔁 **Duplicate** → fullscreen **red lock** appears; enter the admin password to continue.
+  - 🔄 **Processing** → blue in-card overlay (`ui_cooldown_ms`)
+  - ✅ **Saved** → green in-card overlay (`success_toast_ms`)
+  - ⚠️ **Warning** → amber in-card overlay (e.g., invalid QR length — must be **33 chars**)
+  - 🔁 **Duplicate** → fullscreen **red lock** appears; enter admin password.
 
 **Quality of life**
-- Input auto-refocuses when it loses focus  
-- Repeated quick scans are ignored (**debounce**)  
-- After unlocking: input re-enables and state resets  
-- Password field is always **cleared** (autofill disabled)  
-- New: No more floating toasts — all visual feedback is now rendered *inside the card*  
-- New: Overlays are **opaque** and block input interactions completely
+- Auto-focus restores on blur
+- Rapid repeats ignored (**debounce**)
+- Lock screen remembers state until unlocked
+- Inputs disabled during processing
+- Client device info (model, platform) now auto-collected (no UI field)
+- Fully opaque overlays block input and focus
 
 ---
 
 ## ⚙️ QR Scan Settings (Single DocType)
 Centralized configuration for all client behaviors:
-- `success_toast_ms` → Success overlay duration  
-- `ui_cooldown_ms` → Loading overlay duration  
-- `beep_enabled`, `vibrate_enabled` → Enable/disable audio or vibration feedback  
-- `debounce_ms` → Minimum interval between scans  
-- `autofocus_back` → Auto-focus on the input field  
-- `silence_ms` → Silence window for auto-submit  
-- `lock_on_duplicate` → Enable/disable lock on duplicates  
-- `unlock_password` → Admin password (verified server-side)
+- `success_toast_ms` → Success overlay duration
+- `ui_cooldown_ms` → Processing overlay duration
+- `beep_enabled`, `vibrate_enabled` → Enable/disable sound/vibration
+- `debounce_ms` → Minimum interval between scans
+- `autofocus_back` → Auto-refocus input
+- `silence_ms` → Silence window for auto-submit
+- `lock_on_duplicate` → Enable/disable lock on duplicates
+- `unlock_password` → Admin password (server-side verified)
 
-> ⚡ `site_config.json`’s `qr_scanner_unlock_password` is used as a fallback.  
-> The `get_client_settings` API exposes these settings to the front-end.
+> ⚡ `site_config.json`’s `qr_scanner_unlock_password` is used as fallback.  
+> The `get_client_settings` API exposes these safely to the frontend.
+
+---
+
+## 🧩 Metadata
+Each record stores device and client info (structured fields + JSON):
+- `device_label`, `device_model`, `device_vendor`, `device_uuid`
+- `client_platform`, `client_lang`, `client_hw_threads`, `client_screen`, `client_user_agent`
+- Additional raw payload can still be stored in `metadata` (JSON) if needed.
+- All sent via `client_meta` automatically — **no UI required**.
+
+---
+
+## 🔧 Migration (v1.2.0)
+This release adds device/client fields to **QR Scan Record** and requires a migration.
+
+1) **Ensure DocType fields** exist in `QR Scan Record`:
+   - `device_label` (Data), `device_model` (Data), `device_vendor` (Data), `device_uuid` (Data)
+   - `client_platform` (Data), `client_lang` (Data), `client_hw_threads` (Int), `client_screen` (Data), `client_user_agent` (Small Text)
+
+2) **Ensure UNIQUE index** on `qr_code` (idempotent patch):
+```python
+# qr_scanner/patches/v1_2_0_qr_scan_record_device_fields.py
+import frappe
+INDEX_NAME = "uniq_qr_code"
+def _has_index(name): 
+    return bool(frappe.db.sql("SHOW INDEX FROM `tabQR Scan Record` WHERE Key_name=%s", (name,), as_dict=True))
+def execute():
+    if not _has_index(INDEX_NAME):
+        frappe.db.sql(f"ALTER TABLE `tabQR Scan Record` ADD UNIQUE KEY `{INDEX_NAME}` (`qr_code`)")
+        frappe.db.commit()
+```
+Append to `patches.txt`:
+```
+qr_scanner.patches.v1_2_0_qr_scan_record_device_fields
+```
+
+3) **Reload & migrate**:
+```bash
+bench --site your.site reload-doc "QR Scanner" doctype qr_scan_record
+bench --site your.site migrate
+```
 
 ---
 
@@ -59,34 +115,29 @@ Access to both **page** and **API** is granted to:
 - `QR Scanner User`
 - `QR Scanner Manager`
 
-You can still customize Doctype and API permissions as needed.
-
 ---
 
 ## 🧪 Duplicate Behavior
-- Duplicates are never inserted again.  
-- For concurrency safety, ensure a **UNIQUE index** on the `qr_code` field of `QR Scan Record`.
+- Duplicates are never reinserted.
+- Ensure **UNIQUE index** on `qr_code` field in `QR Scan Record`.
 
 ---
 
 ## 🔒 Lock & Password
-- On duplicate → **fullscreen red lock**  
-- Password is verified via `qr_scanner.api.verify_unlock_password`  
-- Successful unlock closes the lock (client-side only, no Redis cache)  
+- On duplicate → **fullscreen red lock**
+- Verified via `qr_scanner.api.verify_unlock_password`
 - Password can be configured via `QR Scan Settings` or `site_config.json`
-
-> 🔒 Persistent server locks were removed for better speed and stability.  
-> Passwords remain verified server-side for security.
+- Client lock persists until correctly unlocked
 
 ---
 
-## 🧩 Quick Troubleshooting
+## 🧩 Troubleshooting
 | Issue | Fix |
 |--------|------|
 | Page not visible | `bench reload-doc "QR Scanner" page qr_scanner` |
-| Permission denied | Check roles: System Manager, QR Scanner User, QR Scanner Manager |
+| Permission denied | Ensure System Manager / QR Scanner roles |
 | Duplicate check fails | Ensure UNIQUE index on `qr_code` |
-| Lock not opening | Check `lock_on_duplicate` in settings |
-| No password set | Fill in the `Unlock Password` in QR Scan Settings |
-| Scanner stuck after lock | Update JS — password input now resets correctly |
-| Overlay too fast | Adjust `ui_cooldown_ms` or `success_toast_ms` in settings |
+| Lock not opening | Verify `lock_on_duplicate` setting |
+| No password set | Fill `Unlock Password` in QR Scan Settings |
+| Overlay timing | Adjust `ui_cooldown_ms` / `success_toast_ms` |
+| Invalid length warning | Code must be **exactly 33 characters** | 
