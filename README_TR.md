@@ -15,7 +15,8 @@
 - **Küçük ekran kilidi** (≤ 420×720): parola ile buton dikey hizalanır, buton %100 genişlik alır.
 - **33 karakter doğrulaması**: İstemci tarafında **33 hane değilse** uyarı overlay’i; sunucu `invalid_length` döner.
 - **Cihaz/istemci metadata**: Tarayıcıdan sessizce toplanır ve her kayda yazılır (bkz. *Metadata*).
-- **Migrasyon gerekli**: DocType alanları eklendi; `qr_code` için UNIQUE index (bkz. *Migrasyon*).
+
+> ℹ️ Bu sürüm için DB patch **eklenmedi**. Yeni alanların aktif olması için **reload + migrate** yeterlidir. `qr_code` için UNIQUE index eklemek isterseniz bunu ayrıca (ileride) yapabilirsiniz.
 
 ---
 
@@ -78,30 +79,14 @@ Her kayıt cihaz ve istemci bilgisini tutar (alanlar + JSON):
 ---
 
 ## 🔧 Migrasyon (v1.2.0)
-Bu sürüm **QR Scan Record**’a cihaz/istemci alanları ekler ve migrasyon gerektirir.
+Bu sürüm için patch dosyası **yok**. Yeni alanları aktifleştirmek için:
 
-1) **DocType alanlarını** ekleyin (yukarıdaki liste).  
-2) `qr_code` üzerinde **UNIQUE index** sağlamak için idempotent patch ekleyin:
-```python
-# qr_scanner/patches/v1_2_0_qr_scan_record_device_fields.py
-import frappe
-INDEX_NAME = "uniq_qr_code"
-def _has_index(name):
-    return bool(frappe.db.sql("SHOW INDEX FROM `tabQR Scan Record` WHERE Key_name=%s", (name,), as_dict=True))
-def execute():
-    if not _has_index(INDEX_NAME):
-        frappe.db.sql(f"ALTER TABLE `tabQR Scan Record` ADD UNIQUE KEY `{INDEX_NAME}` (`qr_code`)")
-        frappe.db.commit()
-```
-`patches.txt` sonuna ekleyin:
-```
-qr_scanner.patches.v1_2_0_qr_scan_record_device_fields
-```
-3) **Reload & migrate**:
 ```bash
 bench --site your.site reload-doc "QR Scanner" doctype qr_scan_record
 bench --site your.site migrate
 ```
+
+> İsteğe bağlı (özellikle yüksek hacimde): `qr_code` için **UNIQUE** index ekleyebilirsiniz. Bu adım bu sürüm için zorunlu değildir.
 
 ---
 
@@ -115,7 +100,7 @@ bench --site your.site migrate
 
 ## 🧪 Duplicate Davranışı
 - Duplicate QR kodlar yeniden kaydedilmez.  
-- `QR Scan Record`’da `qr_code` için **UNIQUE index** olduğundan emin olun.
+- İsterseniz `QR Scan Record`’da `qr_code` için **UNIQUE index** ekleyebilirsiniz.
 
 ---
 
@@ -132,7 +117,7 @@ bench --site your.site migrate
 |--------|--------|
 | Sayfa görünmüyor | `bench reload-doc "QR Scanner" page qr_scanner` |
 | Yetki hatası | System Manager / QR Scanner rollerini kontrol edin |
-| Duplicate çalışmıyor | `qr_code` alanında UNIQUE index olduğundan emin olun |
+| Duplicate çalışmıyor | Gerekirse `qr_code` için UNIQUE index eklemeyi düşünün |
 | Parola ekranı açılmıyor | `lock_on_duplicate` ayarını kontrol edin |
 | Parola yok | QR Scan Settings → Unlock Password alanını doldurun |
 | Overlay süresi | `ui_cooldown_ms` veya `success_toast_ms` ayarlarını güncelleyin |

@@ -15,7 +15,8 @@ On a **duplicate**, a **fullscreen red lock** appears — requires an **admin pa
 - **Small-screen lock UX** (≤ 420×720): password and unlock button stack vertically; unlock button is full-width.
 - **33‑char validation**: Client-side rejects codes that are not exactly **33 characters** with a warning overlay; server returns `invalid_length`.
 - **Device & client metadata**: Collected silently from the browser and stored per record (see *Metadata* below).
-- **Migration required**: DocType fields added; ensure UNIQUE index on `qr_code` (see *Migration*).
+
+> ℹ️ No DB patch was added for this release. See **Migration** for simple reload/migrate steps. You may add a UNIQUE index for `qr_code` separately if you prefer, but it's optional here.
 
 ---
 
@@ -78,34 +79,14 @@ Each record stores device and client info (structured fields + JSON):
 ---
 
 ## 🔧 Migration (v1.2.0)
-This release adds device/client fields to **QR Scan Record** and requires a migration.
+No patch file was created for this release. Perform a simple reload + migrate so new fields are available:
 
-1) **Ensure DocType fields** exist in `QR Scan Record`:
-   - `device_label` (Data), `device_model` (Data), `device_vendor` (Data), `device_uuid` (Data)
-   - `client_platform` (Data), `client_lang` (Data), `client_hw_threads` (Int), `client_screen` (Data), `client_user_agent` (Small Text)
-
-2) **Ensure UNIQUE index** on `qr_code` (idempotent patch):
-```python
-# qr_scanner/patches/v1_2_0_qr_scan_record_device_fields.py
-import frappe
-INDEX_NAME = "uniq_qr_code"
-def _has_index(name): 
-    return bool(frappe.db.sql("SHOW INDEX FROM `tabQR Scan Record` WHERE Key_name=%s", (name,), as_dict=True))
-def execute():
-    if not _has_index(INDEX_NAME):
-        frappe.db.sql(f"ALTER TABLE `tabQR Scan Record` ADD UNIQUE KEY `{INDEX_NAME}` (`qr_code`)")
-        frappe.db.commit()
-```
-Append to `patches.txt`:
-```
-qr_scanner.patches.v1_2_0_qr_scan_record_device_fields
-```
-
-3) **Reload & migrate**:
 ```bash
 bench --site your.site reload-doc "QR Scanner" doctype qr_scan_record
 bench --site your.site migrate
 ```
+
+> Optional (recommended at scale): add a **UNIQUE** index on `qr_code` to harden duplicate protection. This can be done later via your DBA/process; not required for this version.
 
 ---
 
@@ -119,7 +100,7 @@ Access to both **page** and **API** is granted to:
 
 ## 🧪 Duplicate Behavior
 - Duplicates are never reinserted.
-- Ensure **UNIQUE index** on `qr_code` field in `QR Scan Record`.
+- You can enforce a **UNIQUE index** on `qr_code` in `QR Scan Record` if desired.
 
 ---
 
@@ -136,7 +117,7 @@ Access to both **page** and **API** is granted to:
 |--------|------|
 | Page not visible | `bench reload-doc "QR Scanner" page qr_scanner` |
 | Permission denied | Ensure System Manager / QR Scanner roles |
-| Duplicate check fails | Ensure UNIQUE index on `qr_code` |
+| Duplicate check fails | Consider adding a DB UNIQUE index on `qr_code` |
 | Lock not opening | Verify `lock_on_duplicate` setting |
 | No password set | Fill `Unlock Password` in QR Scan Settings |
 | Overlay timing | Adjust `ui_cooldown_ms` / `success_toast_ms` |
