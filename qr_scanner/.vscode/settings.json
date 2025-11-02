@@ -2,7 +2,9 @@
   "git.remotes": [
     {
       "name": "upstream",
-      "publish": true
+      "publish": true,
+      "fetchUrl": "https://github.com/KTA-Endustri-Sistemleri/qr_scanner.git",
+      "pushUrl": "git@github.com:KTA-Endustri-Sistemleri/qr_scanner.git"
     }
   ]
 }
