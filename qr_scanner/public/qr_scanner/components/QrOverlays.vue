@@ -58,3 +58,69 @@ const props = withDefaults(defineProps<Props>(), {
     </div>
   </div>
 </template>
+<!-- components/QrOverlays.vue -->
+<style scoped>
+/* Kartı tamamen kaplayan opak overlay katmanı */
+.qr-overlay{
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  display: block;          /* görünürlüğü inline style ile yönetiyoruz */
+  pointer-events: none;    /* görünürken tıklamalar bloklansın istiyorsan 'all' yapabilirsin */
+}
+
+.qr-overlay .qr-overlay-content{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  height: 100%;
+  gap: 8px;
+  font-weight: 600;
+  padding: 18px;
+  color: inherit;
+}
+
+/* LOADING */
+.qr-overlay.loading{
+  background: #1e40af; /* blue-800 */
+  color: #ffffff;
+}
+.qr-overlay.loading .qr-spinner{
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: qrs .8s linear infinite;
+}
+
+/* SUCCESS */
+.qr-overlay.success{
+  background: #166534; /* green-800 */
+  color: #ffffff;
+}
+.qr-overlay.success .qr-dot-ok{
+  width: 12px; height: 12px; border-radius: 50%; background: #ffffff;
+}
+
+/* WARNING */
+.qr-overlay.warning{
+  background: #92400e; /* amber-800 */
+  color: #ffffff;
+}
+.qr-overlay.warning .qr-dot-ok{
+  width: 12px; height: 12px; border-radius: 50%; background: #ffffff;
+}
+
+@keyframes qrs { to { transform: rotate(360deg); } }
+
+@media (prefers-color-scheme: dark){
+  .qr-overlay.loading{ background:#1e3a8a; }  /* blue-900 */
+  .qr-overlay.success{ background:#14532d; }  /* green-900 */
+  .qr-overlay.warning{ background:#78350f; }  /* amber-900 */
+}
+</style>
