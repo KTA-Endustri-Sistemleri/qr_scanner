@@ -1,0 +1,8 @@
+{
+  "git.remotes": [
+    {
+      "name": "upstream",
+      "publish": true
+    }
+  ]
+}
