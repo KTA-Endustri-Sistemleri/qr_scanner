@@ -8,19 +8,70 @@
   "track_changes": 1,
   "title_field": "qr_code",
   "autoname": "field:qr_code",
+
   "fields": [
-    {"fieldname": "qr_code", "fieldtype": "Data", "label": "QR Code", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
-    {"fieldname": "scan_time", "fieldtype": "Datetime", "label": "Scan Time", "default": "Now", "in_list_view": 1},
-    {"fieldname": "scanned_by", "fieldtype": "Link", "options": "User", "label": "Scanned By", "in_list_view": 1},
-    {"fieldname": "scanned_via", "fieldtype": "Select", "label": "Scanned Via", "options": "USB Scanner\nMobile Camera\nAPI", "in_list_view": 1},
-    {"fieldname": "device_id", "fieldtype": "Data", "label": "Device ID"},
-    {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "New\nValidated\nRejected", "default": "New", "in_list_view": 1},
-    {"fieldname": "is_duplicate", "fieldtype": "Check", "label": "Is Duplicate"},
-    {"fieldname": "metadata", "fieldtype": "Small Text", "label": "Metadata (JSON)"}
+    { "fieldname": "sec_core",        "fieldtype": "Section Break", "label": "Core" },
+
+    {
+      "fieldname": "qr_code",
+      "fieldtype": "Data",
+      "label": "QR Code",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "unique": 1,
+      "index": 1
+    },
+    { "fieldname": "scan_time",   "fieldtype": "Datetime", "label": "Scan Time", "default": "Now", "in_list_view": 1 },
+    { "fieldname": "scanned_by",  "fieldtype": "Link",     "options": "User", "label": "Scanned By", "in_list_view": 1 },
+    {
+      "fieldname": "scanned_via",
+      "fieldtype": "Select",
+      "label": "Scanned Via",
+      "options": "USB Scanner\nMobile Camera\nManual\nAPI",
+      "in_list_view": 1
+    },
+    { "fieldname": "device_id",   "fieldtype": "Data", "label": "Device ID" },
+
+    { "fieldname": "col_core_1",  "fieldtype": "Column Break" },
+
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "New\nValidated\nRejected",
+      "default": "New",
+      "in_list_view": 1
+    },
+    { "fieldname": "is_duplicate", "fieldtype": "Check", "label": "Is Duplicate" },
+    { "fieldname": "metadata",     "fieldtype": "Small Text", "label": "Metadata (JSON)" },
+
+    { "fieldname": "sec_device",   "fieldtype": "Section Break", "label": "Device & Client" },
+
+    {
+      "fieldname": "input_method",
+      "fieldtype": "Select",
+      "label": "Input Method",
+      "options": "USB Scanner\nManual\nAPI\nMobile App"
+    },
+    { "fieldname": "device_uuid",      "fieldtype": "Data",       "label": "Device UUID", "length": 64, "index": 1 },
+    { "fieldname": "device_label",     "fieldtype": "Data",       "label": "Device Label" },
+    { "fieldname": "device_vendor",    "fieldtype": "Data",       "label": "Device Vendor" },
+    { "fieldname": "device_model",     "fieldtype": "Data",       "label": "Device Model" },
+
+    { "fieldname": "col_dev_1",        "fieldtype": "Column Break" },
+
+    { "fieldname": "client_platform",  "fieldtype": "Data",       "label": "Client Platform" },
+    { "fieldname": "client_lang",      "fieldtype": "Data",       "label": "Client Language" },
+    { "fieldname": "client_hw_threads","fieldtype": "Int",        "label": "Hardware Threads" },
+    { "fieldname": "client_screen",    "fieldtype": "Data",       "label": "Screen (WxH)" },
+    { "fieldname": "client_user_agent","fieldtype": "Small Text", "label": "User Agent" },
+    { "fieldname": "ip_address",       "fieldtype": "Data",       "label": "IP Address", "in_standard_filter": 1 }
   ],
+
   "permissions": [
-    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
-    {"role": "QR Scanner Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
-    {"role": "QR Scanner User", "read": 1, "write": 0, "create": 1, "delete": 0}
+    { "role": "System Manager",     "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "QR Scanner Manager", "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "QR Scanner User",    "read": 1, "write": 0, "create": 1, "delete": 0 }
   ]
 }

@@ -1,3 +1,36 @@
+## [1.2.0] - 2025-11-01
+### ✨ UI/UX
+- **In-card opaque overlays** replace floating toasts:
+  - 🔄 **Processing** → blue overlay (duration from `ui_cooldown_ms`)
+  - ✅ **Success** → green overlay (duration from `success_toast_ms`)
+  - ⚠️ **Warning** → amber overlay (e.g., invalid QR length)
+  - Overlays are fully opaque (no transparency) and **block input** during display.
+  - Accessible ARIA roles/live regions added; overlays render **inside** the existing ERPNext card without altering default styling.
+- **State machine helpers**: `setIdle()`, `setLoading()`, `setSuccess()`, `setWarning()` for predictable transitions.
+- **Small-screen lock UX** (≤ 420×720): password + button stack vertically; Unlock button becomes 100% width.
+- **Focus & feedback**: input auto-refocuses after flows; beep/vibrate maintained per settings.
+
+### 📊 Record Details
+- **Device/Client metadata** persisted on each scan (from `client_meta`):
+  - `device_label`, `device_model`, `device_vendor`, `device_uuid`
+  - `client_platform`, `client_lang`, `client_hw_threads`, `client_screen`, `client_user_agent`
+- **Client-side validation**: QR code must be **exactly 33 characters** (warning overlay).  
+  Server returns `invalid_length` for mismatches.
+
+### 🧩 Internal / Refactor
+- Desk page rebuilt as **class-based** (`QRScannerPage`) for clarity and testability.
+- Non-critical tasks deferred (settings fetch, device model resolution) to keep first paint snappy.
+- Moved jQuery-dependent DOM ops out of hot paths; plain JS for critical interactions.
+- Timers and audio contexts are cleaned up reliably to avoid leaks.
+
+### 🛠️ Migration
+- **DocType change**: `QR Scan Record` updated with new device/client fields.
+- **Index**: Ensure a **UNIQUE** index on `qr_code` (idempotent patch provided in `MIGRATION.md`).
+
+### ⚙️ Version
+- Bump: `1.1.1 → 1.2.0`
+- Backward compatible after migration.
+
 ## [1.1.1] - 2025-10-25
 ### ✨ Improved UI & UX
 - **Card Overlay System**  
