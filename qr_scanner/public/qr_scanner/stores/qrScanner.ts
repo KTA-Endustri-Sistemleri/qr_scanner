@@ -65,6 +65,21 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
     state.mode = 'loading';
     cooldownEndsAt = now() + dur;
   }
+  function scheduleWarningAfterCooldown(msg?: string, onDone?: () => void) {
+  const remaining = Math.max(0, cooldownEndsAt - now());
+  if (toSuccessTimer) clearTimeout(toSuccessTimer);
+  toSuccessTimer = setTimeout(() => {
+    state.warnMsg = msg || 'Code must be exactly 33 characters. Please rescan.';
+    state.mode = 'warning';
+    const dur = Number(CFG.success_toast_ms || 1500);
+    if (successHideTimer) clearTimeout(successHideTimer);
+    successHideTimer = setTimeout(() => {
+      state.mode = 'none';
+      state.inFlight = false;
+      onDone?.();
+    }, dur);
+  }, remaining);
+  }
   function scheduleSuccess(name?: string | null, onDone?: () => void) {
     const remaining = Math.max(0, cooldownEndsAt - now());
     if (toSuccessTimer) clearTimeout(toSuccessTimer);
@@ -80,18 +95,6 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
       }, successMs);
     }, remaining);
   }
-  function scheduleWarning(msg?: string, onDone?: () => void) {
-    state.warnMsg = msg || 'Code must be exactly 33 characters. Please rescan.';
-    state.mode = 'warning';
-    const dur = Number(CFG.success_toast_ms || 1500);
-    if (successHideTimer) clearTimeout(successHideTimer);
-    successHideTimer = setTimeout(() => {
-      state.mode = 'none';
-      state.inFlight = false;
-      onDone?.();
-    }, dur);
-  }
-
   // --- Lock ---
   function engageLock(reason?: 'duplicate' | string) {
     abortToIdle();
@@ -141,8 +144,9 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
     lastCode = trimmed; lastTime = t;
 
     if (trimmed.length !== 33) {
+      startCooldown(CFG.ui_cooldown_ms);
       hBeep(300, 140); hVibrate(90);
-      scheduleWarning('Code must be exactly 33 characters. Please rescan.', afterIdleFocus);
+      scheduleWarningAfterCooldown('Code must be exactly 33 characters. Please rescan.',afterIdleFocus);
       return;
     }
 
@@ -163,8 +167,9 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
         hBeep(900, 110); hVibrate(40);
         scheduleSuccess(m.name, afterIdleFocus);
       } else if (m.reason === 'invalid_length') {
+        startCooldown(CFG.ui_cooldown_ms);
         hBeep(300, 140); hVibrate(90);
-        scheduleWarning('Code must be exactly 33 characters. Please rescan.', afterIdleFocus);
+        scheduleWarningAfterCooldown('Code must be exactly 33 characters. Please rescan.', afterIdleFocus);
       } else if (m.reason === 'duplicate') {
         if (CFG.lock_on_duplicate) engageLock('duplicate');
         else { frappe.show_alert({ message: 'Duplicate: already scanned.', indicator: 'red' }); abortToIdle(); afterIdleFocus?.(); }
@@ -205,10 +210,12 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
           : 'Invalid password.');
         hBeep(220, 160); hVibrate(90);
       }
-    }).catch(() => {
-      showLockError('Server unreachable.');
-      hBeep(220, 160); hVibrate(90);
-    }).finally(() => {
+    },
+    (_err: any) => {
+        showLockError('Server unreachable.');
+        hBeep(220, 160); hVibrate(90);
+      }
+    ).then(() => {
       state.lockBusy = false;
       if (unlockWatchdog) { clearTimeout(unlockWatchdog); unlockWatchdog = null; }
     });
