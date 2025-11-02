@@ -1,265 +1,325 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, reactive, ref } from 'vue';
-import { getClientSettings, createScan, verifyUnlockPassword } from './api';
-import { beep, vibrate } from './haptics';
-import type { ClientSettings } from './types';
+/* global frappe */
+declare const frappe: any;
 
-// ===== Props (wrapper, Page context için hazır) =====
-type Props = { wrapper?: any };
-const props = defineProps<Props>();
+import { reactive, ref, onMounted, onBeforeUnmount } from 'vue';
+import { beep as hwBeep, vibrate as hwVibrate } from './haptics';
+import InputRow from './components/InputRow.vue';
+import QrOverlays from './components/QrOverlays.vue';
+import LockDialog from './components/LockDialog.vue';
+import { collectClientMeta, getHighEntropyModelIfAny } from './composables/useDeviceMeta';
 
-// ===== State (ESKİ JS'teki this.* alanlarıyla bire bir) =====
-const DEBUG = (window as any).QR_DEBUG === true;
-const ui = reactive({
-  status: 'Idle',
-  overlay: { mode: 'hidden' as 'hidden'|'loading'|'success'|'warning', text: '' },
-  locked: false,
+// --- CFG (server override edilecek) ---
+const CFG = reactive<Record<string, any>>({
+  success_toast_ms: 1500,
+  beep_enabled: 1,
+  vibrate_enabled: 1,
+  debounce_ms: 800,
+  autofocus_back: 1,
+  silence_ms: 120,
+  lock_on_duplicate: 1,
+  loading_enabled: 1,
+  ui_cooldown_ms: 1000,
+});
+
+// --- UI State ---
+const state = reactive({
   inFlight: false,
+  isLocked: false,
+  mode: 'none' as 'none' | 'loading' | 'success' | 'warning',
+  successName: null as string | null,
+  warnMsg: 'Code must be exactly 33 characters. Please rescan.' as string,
+  lockDesc: 'Duplicate barcode detected. Enter admin password to continue.',
+  lockError: null as string | null,
+  lockBusy: false,
 });
-const settings = reactive<ClientSettings>({
-  success_toast_ms: 900,
-  duplicate_sticky: false,     // ESKİ DAVRANIŞ: true → overlay otomatik kapanmaz
-  beep_enabled: true,
-  vibrate_enabled: true,
-  debounce_ms: 60,
-  autofocus_back: true,
-});
-const last = reactive({ code: '', ts: 0 });
-const cooldownEndsAt = ref(0);
 
-// Manual input
-const manualInput = ref<HTMLInputElement | null>(null);
+let lastCode = '';
+let lastTime = 0;
+let cooldownEndsAt = 0;
+let toSuccessTimer: any = null;
+let successHideTimer: any = null;
+let unlockWatchdog: any = null;
 
-// ===== Util (ESKİ JS ile aynı davranış) =====
-function withinCooldown() { return Date.now() < cooldownEndsAt.value; }
-function setStatus(text: string) { ui.status = text; }
-function setOverlay(mode: 'hidden'|'loading'|'success'|'warning', text = '') {
-  ui.overlay.mode = mode; ui.overlay.text = text;
+let cachedModel: string | null = null;
+
+// ---- Helpers ----
+function hBeep(freq = 880, ms = 110) { if (CFG.beep_enabled) try { hwBeep(freq, ms); } catch {} }
+function hVibrate(ms = 60) { if (CFG.vibrate_enabled) try { hwVibrate(ms); } catch {} }
+function now() { return Date.now(); }
+function focusInput() { inputRef.value?.focusSoon(); }
+
+function clearTimers() {
+  if (toSuccessTimer) { clearTimeout(toSuccessTimer); toSuccessTimer = null; }
+  if (successHideTimer) { clearTimeout(successHideTimer); successHideTimer = null; }
 }
-function hBeep(freq = 660, ms = 120) { if (settings.beep_enabled) beep(freq, ms); }
-function hVibrate(ms = 60) { if (settings.vibrate_enabled) vibrate(ms); }
-function focusManualSoon() { setTimeout(() => manualInput.value?.focus(), 30); }
-
-// ESKİ JS: Sunucu mesaj çözümleme (_server_messages desteği)
-function parseServerMessage(resp: any): string | null {
-  try {
-    const s = resp?._server_messages;
-    if (!s) return null;
-    const arr = JSON.parse(s);
-    if (Array.isArray(arr)) return arr.join(' ');
-  } catch {}
-  return null;
+function abortToIdle() {
+  clearTimers();
+  state.mode = 'none';
+  state.inFlight = false;
 }
-
-// ===== Client Meta (ESKİ JS'teki toplama mantığını aynen uygular) =====
-function collectClientMeta() {
-  // Eski js’te toplanan tipik alanlar:
-  // userAgent, language, hardwareConcurrency, screen size/dpr, platform, vendor.
-  // ESKİ DAVRANIŞ: değer yoksa undefined bırak (sunucu varsayılanları kullanır).
-  const nav: any = navigator || {};
-  const scr: any = (typeof screen !== 'undefined' ? screen : {}) || {};
-
-  const meta = {
-    input_method: undefined as 'manual'|'usb_scanner'|undefined, // çağrı sırasında set edilecek
-    device_uuid: undefined as string|undefined,
-    device_label: undefined as string|undefined,
-    device_vendor: undefined as string|undefined,
-    device_model: undefined as string|undefined,
-    client_platform: (nav.platform || undefined),
-    client_lang: (nav.language || nav.userLanguage || undefined),
-    client_hw_threads: (typeof nav.hardwareConcurrency === 'number' ? nav.hardwareConcurrency : undefined),
-    client_screen: (scr && (scr.width && scr.height)
-      ? `${scr.width}x${scr.height}@${(window.devicePixelRatio || 1)}`
-      : undefined),
-    client_user_agent: (nav.userAgent || undefined),
-  };
-  return meta;
+function startCooldown(ms?: number) {
+  if (!CFG.loading_enabled) return;
+  const dur = Number(ms != null ? ms : (CFG.ui_cooldown_ms || 1000));
+  if (dur <= 0) return;
+  state.inFlight = true;
+  state.mode = 'loading';
+  cooldownEndsAt = now() + dur;
+}
+function scheduleSuccess(name?: string | null) {
+  const remaining = Math.max(0, cooldownEndsAt - now());
+  if (toSuccessTimer) clearTimeout(toSuccessTimer);
+  toSuccessTimer = setTimeout(() => {
+    state.successName = name || null;
+    state.mode = 'success';
+    const successMs = Number(CFG.success_toast_ms || 1500);
+    if (successHideTimer) clearTimeout(successHideTimer);
+    successHideTimer = setTimeout(() => { state.mode = 'none'; state.inFlight = false; focusInput(); }, successMs);
+  }, remaining);
+}
+function scheduleWarning(msg?: string) {
+  state.warnMsg = msg || 'Code must be exactly 33 characters. Please rescan.';
+  state.mode = 'warning';
+  const dur = Number(CFG.success_toast_ms || 1500);
+  if (successHideTimer) clearTimeout(successHideTimer);
+  successHideTimer = setTimeout(() => { state.mode = 'none'; state.inFlight = false; focusInput(); }, dur);
 }
 
-// ===== Scan flow (ESKİ JS ile bire bir) =====
-async function onScan(code: string, input_method: 'manual'|'usb_scanner' = 'manual') {
-  if (ui.locked || ui.inFlight || withinCooldown()) return;
+// ---- Lock ----
+function engageLock(reason?: 'duplicate' | string) {
+  abortToIdle();
+  state.isLocked = true;
+  state.lockError = null;
+  state.lockDesc = reason === 'duplicate'
+    ? 'Duplicate detected. Enter admin password to continue.'
+    : 'Enter admin password to continue.';
+  setTimeout(() => lockRef.value?.inputEl?.focus(), 50);
+  try { localStorage.setItem('qr_lock', reason || 'duplicate'); } catch {}
+}
+function releaseLock() {
+  state.isLocked = false;
+  state.lockBusy = false;
+  state.lockError = null;
+  try { localStorage.removeItem('qr_lock'); } catch {}
+  lastCode = ''; lastTime = 0; state.inFlight = false; state.mode = 'none';
+  focusInput();
+}
+function showLockError(msg?: string) { state.lockError = msg || 'Error'; }
 
-  const now = Date.now();
-  // ESKİ DAVRANIŞ: duplicate guard = 600ms
-  if (code === last.code && now - last.ts < 600) {
-    hBeep(220, 160); hVibrate(90);
+// ---- Flow ----
+function onEnter(code: string) {
+  if (state.isLocked || state.inFlight) return;
+
+  const t = now();
+  if (code === lastCode && (t - lastTime) < (CFG.debounce_ms || 800)) return;
+  lastCode = code; lastTime = t;
+
+  if ((code || '').length !== 33) {
+    hBeep(300, 140); hVibrate(90);
+    scheduleWarning('Code must be exactly 33 characters. Please rescan.');
     return;
   }
 
-  ui.inFlight = true;
-  last.code = code; last.ts = now;
+  startCooldown(CFG.ui_cooldown_ms);
 
-  setStatus('Reading…');
-  setOverlay('loading', 'Reading…');
-
-  // ESKİ DAVRANIŞ: client meta her çağrıda toplanır ve create_scan'e gönderilir
-  const meta = collectClientMeta();
-  meta.input_method = input_method;
-
-  try {
-    const r = await createScan(code, meta);
-    const serverMsg = r?.msg || parseServerMessage(r) || null;
-
-    if (r?.ok && r.created) {
-      // SUCCESS (ESKİ DAVRANIŞ):
-      setStatus('Saved');
-      setOverlay('success', serverMsg || 'Saved');
-      hBeep(880, 90); hVibrate(40);
-      cooldownEndsAt.value = Date.now() + 300; // küçük post-success guard
-
-      // success overlay auto-hide: ESKİ DAVRANIŞ (success_toast_ms’le uyumlu)
-      if (!settings.duplicate_sticky) {
-        setTimeout(() => setOverlay('hidden', ''), settings.success_toast_ms ?? 900);
-      }
-      ui.inFlight = false;
-      return;
+  const req = frappe.call({
+    method: 'qr_scanner.api.create_scan',
+    args: {
+      qr_code: code,
+      scanned_via: 'USB Scanner',
+      client_meta: collectClientMeta(cachedModel),
     }
+  });
 
-    if (r?.reason === 'duplicate') {
-      // DUPLICATE (ESKİ DAVRANIŞ):
-      setStatus('Duplicate');
-      setOverlay('warning', serverMsg || 'Duplicate / Locked');
+  req.then((r: any) => {
+    const m = r?.message || {};
+    if (m.created) {
+      hBeep(900, 110); hVibrate(40);
+      scheduleSuccess(m.name);
+    } else if (m.reason === 'invalid_length') {
+      hBeep(300, 140); hVibrate(90);
+      scheduleWarning('Code must be exactly 33 characters. Please rescan.');
+    } else if (m.reason === 'duplicate') {
+      if (CFG.lock_on_duplicate) engageLock('duplicate');
+      else { frappe.show_alert({ message: 'Duplicate: already scanned.', indicator: 'red' }); abortToIdle(); }
       hBeep(220, 160); hVibrate(90);
-      ui.inFlight = false;
-
-      // ESKİ DAVRANIŞ: duplicate_sticky === true ise overlay KAPANMAZ
-      if (!settings.duplicate_sticky) {
-        setTimeout(() => setOverlay('hidden', ''), settings.success_toast_ms ?? 900);
-      }
-      return;
+    } else {
+      const serverMsg =
+        m.msg ||
+        (r && r._server_messages && (() => { try { return JSON.parse(r._server_messages).join(' '); } catch { return null; } })()) ||
+        'Operation failed.';
+      frappe.show_alert({ message: serverMsg, indicator: 'red' });
+      abortToIdle();
+      hBeep(220, 160); hVibrate(90);
     }
-
-    // OTHER ERRORS (ESKİ DAVRANIŞ):
-    const fallback = serverMsg || r?.msg || 'Operation failed.';
-    frappe.show_alert({ message: fallback, indicator: 'red' });
-    setStatus('Error');
-    setOverlay('warning', fallback);
-    hBeep(220, 160); hVibrate(90);
-  } catch (err: any) {
-    // NETWORK / SERVER DOWN (ESKİ DAVRANIŞ)
+  }).catch(() => {
     frappe.show_alert({ message: 'Server unreachable.', indicator: 'red' });
-    setStatus('Error');
-    setOverlay('warning', 'Server unreachable.');
+    abortToIdle();
     hBeep(220, 160); hVibrate(90);
-  } finally {
-    ui.inFlight = false;
-  }
+  });
 }
 
-// ===== Manual input (ESKİ DAVRANIŞ) =====
-function onManualKey(e: KeyboardEvent) {
-  if (e.key !== 'Enter') return;
-  const code = (manualInput.value?.value || '').trim();
-  if (!code) return;
-  onScan(code, 'manual');
-  if (manualInput.value) manualInput.value.value = '';
+function onUnlockSubmit(pw: string) {
+  if (!pw || state.lockBusy) return;
+  state.lockBusy = true;
+
+  // 10s watchdog
+  if (unlockWatchdog) clearTimeout(unlockWatchdog);
+  unlockWatchdog = setTimeout(() => {
+    state.lockBusy = false;
+  }, 10000);
+
+  const req = frappe.call({ method: 'qr_scanner.api.verify_unlock_password', args: { password: pw } });
+  req.then((r: any) => {
+    const m = r?.message || {};
+    if (m.ok) {
+      releaseLock();
+      hBeep(880, 110); hVibrate(40);
+    } else {
+      showLockError(m.reason === 'not_configured'
+        ? 'Password not configured. Please contact your administrator.' : 'Invalid password.');
+      hBeep(220, 160); hVibrate(90);
+    }
+  }).catch(() => {
+    showLockError('Server unreachable.');
+    hBeep(220, 160); hVibrate(90);
+  }).finally(() => {
+    state.lockBusy = false;
+    if (unlockWatchdog) { clearTimeout(unlockWatchdog); unlockWatchdog = null; }
+  });
 }
 
-// ===== USB scanner burst typing (ESKİ DAVRANIŞ) =====
-let burst = '';
-let burstTimer: any = null;
-
-function onKeydown(e: KeyboardEvent) {
-  // ESKİ DAVRANIŞ: input içinde yazarken (bizim manual input hariç) yakalama
-  const target = e.target as HTMLElement | null;
-  if (target && target.tagName === 'INPUT' && target !== manualInput.value) return;
-
-  if (e.ctrlKey || e.altKey || e.metaKey) return; // modifier’lar devre dışı
-
-  const ch = e.key.length === 1 ? e.key : (e.key === 'Enter' ? '\n' : '');
-  if (!ch) return;
-
-  burst += ch;
-  clearTimeout(burstTimer);
-  burstTimer = setTimeout(() => {
-    const code = burst.replace(/\n/g, '').trim();
-    if (code) onScan(code, 'usb_scanner');
-    burst = '';
-  }, settings.debounce_ms || 60);
-
-  if (e.key === 'Enter') {
-    const code = burst.replace(/\n/g, '').trim();
-    burst = '';
-    if (code) onScan(code, 'usb_scanner');
-  }
-}
-
-// ===== Lock / Unlock (ESKİ DAVRANIŞ) =====
-async function tryUnlock() {
-  const pw = prompt('Unlock password');
-  if (!pw) return;
-  const ok = await verifyUnlockPassword(pw);
-  if (ok) {
-    ui.locked = false; setStatus('Idle'); setOverlay('hidden', '');
-  } else {
-    setOverlay('warning', 'Wrong password'); hBeep(220, 200); hVibrate(120);
-  }
-}
-
-// ===== Lifecycle =====
-onMounted(async () => {
+// ---- Settings + Device identity ----
+async function fetchSettings() {
   try {
-    // ESKİ DAVRANIŞ: get_client_settings ile UI ayarlarını al
-    Object.assign(settings, await getClientSettings());
-  } catch {
-    // sunucu defaultları kullanılacak
-  }
+    const r = await frappe.call({ method: 'qr_scanner.api.get_client_settings' });
+    if (r && r.message) Object.assign(CFG, r.message);
+  } catch {/* noop */}
+}
+async function ensureBackgroundDeviceIdentity() {
+  cachedModel = null;
+  try {
+    const saved = localStorage.getItem('qr_device_model_he');
+    if (saved) cachedModel = saved;
+  } catch {/* noop */}
+  getHighEntropyModelIfAny().then(m => {
+    if (m) {
+      cachedModel = m;
+      try { localStorage.setItem('qr_device_model_he', m); } catch {}
+    }
+  }).catch(() => {});
+}
 
-  window.addEventListener('keydown', onKeydown);
-  focusManualSoon();
-  if (DEBUG) console.log('[QR] Vue ready.');
-});
+// ---- Refs to children ----
+const inputRef = ref<InstanceType<typeof InputRow> | null>(null);
+const lockRef  = ref<InstanceType<typeof LockDialog> | null>(null);
 
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeydown);
+// ---- Lifecycle ----
+onMounted(async () => {
+  await fetchSettings();
+  await ensureBackgroundDeviceIdentity();
+
+  // Persisted lock restore
+  try { const ls = localStorage.getItem('qr_lock'); if (ls) state.isLocked = true; } catch {}
+
+  // İlk odak
+  focusInput();
 });
+onBeforeUnmount(() => clearTimers());
 </script>
 
 <template>
-  <div class="qr-root">
-    <!-- Header / Status -->
-    <div class="qr-status">
-      <div class="qr-title">QR Scanner</div>
-      <div class="qr-status-text">{{ ui.status }}</div>
-      <div class="qr-actions">
-        <button class="qr-btn" @click="ui.locked = true; setOverlay('warning','Locked')">Lock</button>
-        <button class="qr-btn" @click="tryUnlock" :disabled="!ui.locked">Unlock</button>
+  <div class="qr-container">
+    <div id="qrCard" class="card qr-card">
+      <div class="qr-section" role="region" aria-live="polite" aria-atomic="true">
+        <div class="qr-title">USB / Keyboard Wedge</div>
+
+        <!-- Input Row -->
+        <InputRow
+          ref="inputRef"
+          :disabled="state.inFlight || state.isLocked || state.mode !== 'none'"
+          :autofocus="true"
+          :autofocusBack="!!CFG.autofocus_back"
+          @enter="onEnter"
+        />
+
+        <div class="qr-help">
+          States are displayed as opaque overlays inside the card. On duplicate, a red lock requires admin password.
+        </div>
       </div>
+
+      <!-- Opaque overlays (loading/success/warning) -->
+      <QrOverlays
+        :mode="state.mode"
+        :successName="state.successName"
+        :warnMsg="state.warnMsg"
+      />
     </div>
 
-    <!-- Manual Input -->
-    <div class="qr-manual">
-      <input ref="manualInput"
-             class="qr-input"
-             type="text"
-             placeholder="Scan or type and press Enter"
-             @keydown="onManualKey" />
-    </div>
-
-    <!-- Overlay -->
-    <div class="qr-overlay"
-         :class="ui.overlay.mode !== 'hidden' ? ui.overlay.mode : 'qr-overlay--hidden'">
-      <span>{{ ui.overlay.text }}</span>
-    </div>
+    <!-- Fullscreen Lock -->
+    <LockDialog
+      ref="lockRef"
+      :show="state.isLocked"
+      :desc="state.lockDesc"
+      :error="state.lockError"
+      :busy="state.lockBusy"
+      @submit="onUnlockSubmit"
+    />
   </div>
 </template>
 
-<style lang="scss" scoped>
-.qr-root { position: relative; width: 100%; max-width: 960px; margin: 16px auto; padding: 0 12px; }
-.qr-status { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 12px 0; }
-.qr-title { font-weight: 700; font-size: 1.05rem; }
-.qr-status-text { color: var(--qr-status-color, #0f172a); }
-.qr-actions { display: flex; gap: 8px; }
-.qr-btn { padding: 6px 10px; border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px; cursor: pointer; }
-.qr-btn:disabled { opacity: .5; cursor: default; }
-.qr-manual { margin-top: 12px; }
-.qr-input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #cbd5e1; border-radius: 8px; }
+<style>
+/* Orijinal CSS’in tamamı (App.vue’daki) aynen bırakıldı */
+.qr-container { width:100%; max-width:960px; margin:16px auto; padding:0 12px; }
+.qr-card { position: relative; }
+.qr-section { padding:18px; }
+.qr-title { font-weight:700; font-size:1.05rem; margin-bottom:8px; }
+.qr-row { display:flex; gap:10px; align-items:center; }
+.qr-help { color:#6b7280; margin-top:8px; }
+@media (prefers-color-scheme: dark){ .qr-help{ color:#9ca3af; } }
 
-.qr-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-weight: 600; font-size: 18px; opacity: 0; pointer-events: none; transition: opacity .18s; }
-.qr-overlay--hidden { opacity: 0; }
-.qr-overlay.loading { background: #1e40af; color: #fff; opacity: .92; }
-.qr-overlay.success { background: #166534; color: #fff; opacity: .92; }
-.qr-overlay.warning { background: #92400e; color: #fff; opacity: .92; }
+.qr-input{
+  flex:1; font-size:1.1rem; padding:12px 14px;
+  border-radius:10px; border:1px solid #e5e7eb; background:#fff; color:#0f172a;
+}
+.qr-input:focus{ outline:none; border-color:#60a5fa; box-shadow:0 0 0 3px rgba(96,165,250,.22); }
+@media (prefers-color-scheme: dark){
+  .qr-input{ background:#0f172a; color:#e5e7eb; border-color:#243042; }
+}
+
+.qr-overlay{
+  position:absolute; inset:0; z-index:1; border-radius: inherit;
+}
+.qr-overlay .qr-overlay-content{
+  display:flex; flex-direction:column; justify-content:center; align-items:center;
+  text-align:center; width:100%; height:100%; gap:8px; font-weight:600; padding:18px; color:inherit;
+}
+.qr-overlay.loading{ background:#1e40af; color:#ffffff; }
+.qr-overlay.loading .qr-spinner{
+  width:18px; height:18px; border:2px solid rgba(255,255,255,.35);
+  border-top-color:#ffffff; border-radius:50%; animation:qrs .8s linear infinite;
+}
+@keyframes qrs{ to{ transform: rotate(360deg) } }
+
+.qr-overlay.success{ background:#166534; color:#ffffff; }
+.qr-overlay.success .qr-dot-ok{ width:12px; height:12px; border-radius:50%; background:#ffffff; }
+
+.qr-overlay.warning{ background:#92400e; color:#ffffff; }
+.qr-overlay.warning .qr-dot-ok{ width:12px; height:12px; border-radius:50%; background:#ffffff; }
+
+@media (prefers-color-scheme: dark){
+  .qr-overlay.loading{ background:#1e3a8a; }
+  .qr-overlay.success{ background:#14532d; }
+  .qr-overlay.warning{ background:#78350f; }
+}
+
+.qr-lock{position:fixed;inset:0;background:#dc3545;z-index:10000;display:none;color:#fff}
+.qr-lock.show{display:flex}
+.qr-lock-inner{margin:auto;width:min(560px,90vw);background:rgba(0,0,0,.18);border-radius:14px;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.35);backdrop-filter:blur(2px)}
+.qr-lock-title{font-size:1.15rem;font-weight:700;margin-bottom:6px}
+.qr-lock-desc{opacity:.9;margin-bottom:14px}
+.qr-lock-form{display:flex;gap:8px}
+.qr-lock-input{flex:1;padding:12px 14px;border-radius:10px;border:none;outline:none;font-size:1rem}
+.qr-lock-btn{padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600}
+.qr-lock-error{margin-top:10px;font-weight:600;display:block}
 </style>
