@@ -1,14 +1,13 @@
 import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 import App from './App.vue';
 
-declare global { interface Window { qrScanner?: any; } }
-
-export function mount(selector: string, props: Record<string, any> = {}) {
-  const el = document.querySelector(selector);
-  if (!el) throw new Error('Mount element not found: ' + selector);
-  const app = createApp(App, props);
-  app.mount(el);
-  return app;
+export function mount(selector = '#qr-vue-root', _ctx?: any) {
+  const app = createApp(App);
+  const pinia = createPinia();
+  app.use(pinia);
+  app.mount(selector);
 }
 
-window.qrScanner = { mount };
+// frappe.pages[...] tarafında zaten require ile bu mount çağrılıyor:
+// window.qrScanner?.mount?.('#qr-vue-root', { wrapper });

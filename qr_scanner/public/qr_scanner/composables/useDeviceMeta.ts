@@ -78,3 +78,22 @@ export function collectClientMeta(cachedModel?: string | null) {
     client_user_agent: nav.userAgent || null
   };
 }
+
+export async function ensureBackgroundModel(): Promise<string | null> {
+  let cached: string | null = null;
+  try {
+    const saved = localStorage.getItem('qr_device_model_he');
+    if (saved) cached = saved;
+  } catch {}
+  try {
+    const ua: any = (navigator as any).userAgentData;
+    if (ua?.getHighEntropyValues) {
+      const res = await ua.getHighEntropyValues(['platform', 'model']);
+      if (res?.model) {
+        cached = res.model;
+        try { localStorage.setItem('qr_device_model_he', res.model); } catch {}
+      }
+    }
+  } catch {}
+  return cached;
+}
