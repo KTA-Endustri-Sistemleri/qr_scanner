@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "noEmit": true,  
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "jsx": "preserve",
+    "isolatedModules": true
+  },
+  "include": [
+    "qr_scanner/public/**/*.ts",
+    "qr_scanner/public/**/*.vue",
+    "qr_scanner/public/**/*.d.ts",
+    "types.d.ts"
+  ]
+}
