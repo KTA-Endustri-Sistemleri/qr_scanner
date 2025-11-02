@@ -7,7 +7,7 @@ frappe.pages['qr_scanner'].on_page_load = function (wrapper) {
   $('<div id="qr-vue-root" />').appendTo(page.main);
 
   // SADECE bundle adı (app prefix, path yok!)
-  frappe.require('qr_scanner.bundle.js').then(() => {
+  frappe.require('qr_scanner.bundle.ts').then(() => {
     window.qrScanner?.mount?.('#qr-vue-root', { wrapper });
   });
 };
