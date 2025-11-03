@@ -9,5 +9,5 @@ export function mount(selector = '#qr-vue-root', _ctx?: any) {
   app.mount(selector);
 }
 
-// frappe.pages[...] tarafında zaten require ile bu mount çağrılıyor:
-// window.qrScanner?.mount?.('#qr-vue-root', { wrapper });
+// ⬇️ EN ÖNEMLİ KISIM: global’e yaz (frappe.require bunu bekliyor)
+;(window as any).qrScanner = { mount };
