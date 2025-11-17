@@ -5,7 +5,12 @@
 
 ---
 
-## 🆕 v1.2.0’da Neler Değişti (Özet)
+## 🆕 v1.3.0’da Neler Değişti (Özet)
+- **Ön yüz **Vue 3 + TypeScript + Pinia** üzerine taşındı; kullanıcı tarafındaki davranışlar aynı:
+  - Kart içi opak overlay’ler (loading/success/warning) aynı sürelerle
+  - Duplicate → tam ekran kırmızı kilit (persist + watchdog)
+  - 33 karakter doğrulaması, debounce, haptics korunuyor
+  - Cihaz/istemci metadata composable’lara ayrıldı
 - **Kart içi opak overlay’ler** toast’ların yerini aldı:
   - 🔄 **İşlem yapılıyor** → mavi overlay (`ui_cooldown_ms` süresi)
   - ✅ **Kayıt edildi** → yeşil overlay (`success_toast_ms` süresi)

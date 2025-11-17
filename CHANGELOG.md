@@ -1,3 +1,31 @@
+## [1.3.0] - 2025-11-17
+### ♻️ Internal Refactor / Frontend
+- Migrated desk page UI to **Vue 3 + TypeScript + Pinia** while preserving original behaviors:
+  - In-card **opaque overlays** (loading/success/warning) with same timings (`ui_cooldown_ms`, `success_toast_ms`)
+  - **Duplicate → fullscreen red lock** flow unchanged (persist + unlock watchdog)
+  - **33-char validation** & debounce kept client-side; server `invalid_length` handled
+  - **Haptics** (beep/vibrate) extracted into `haptics.ts`
+  - **Device meta** collection split into composables (background model resolution + UA)
+- Introduced a small **page loader** that `frappe.require`’dan sonra `window.qrScanner.mount(...)` çağırır.
+- All overlays & lock are **scoped styles** inside components (no global leakage).
+
+### 🔧 Build & Bundling
+- Single entry bundle: `qr_scanner.bundle.js` (TS/ESM).
+- `window.qrScanner = { mount }` exposed for `frappe.pages['qr_scanner']` boot.
+- No server-side schema changes.
+
+### ⚠️ Compatibility
+- Backward compatible. If you previously hotlinked old JS, switch to `frappe.require(['qr_scanner/qr_scanner.bundle.js', 'qr_scanner.bundle.js'])`.
+
+### 🚀 Upgrade
+```bash
+bench build && bench restart
+# gerekirse cache:
+bench clear-cache
+```
+
+---
+
 ## [1.2.0] - 2025-11-01
 ### ✨ UI/UX
 - **In-card opaque overlays** replace floating toasts:
@@ -30,6 +58,8 @@
 ### ⚙️ Version
 - Bump: `1.1.1 → 1.2.0`
 - Backward compatible after migration.
+
+---
 
 ## [1.1.1] - 2025-10-25
 ### ✨ Improved UI & UX

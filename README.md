@@ -5,7 +5,12 @@ On a **duplicate**, a **fullscreen red lock** appears — requires an **admin pa
 
 ---
 
-## 🆕 What's New in v1.2.0 (Summary)
+## 🆕 What's New in v1.3.0 (Summary)
+- **Frontend rebuilt on **Vue 3 + TypeScript + Pinia** with the same user-facing behaviors:
+  - In-card opaque overlays (loading/success/warning) with server-driven timings
+  - Fullscreen red lock on duplicates (persist + unlock)
+  - 33-char validation, debounce, and haptics unchanged
+  - Device/client metadata collected via composables
 - **In-card opaque overlays** replace floating toasts:
   - 🔄 **Processing** → blue overlay (duration from `ui_cooldown_ms`)
   - ✅ **Saved** → green overlay (duration from `success_toast_ms`)
