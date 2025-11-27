@@ -21,3 +21,12 @@ doc_events = {
 # (İsteğe bağlı) Desk’e global JS/CSS eklemek istersen burada kullan
 # app_include_js = "/assets/qr_scanner/js/some_global.js"
 # app_include_css = "/assets/qr_scanner/css/some_global.css"
+
+fixtures = [
+    {
+        "doctype": "Client Script",
+        "filters": {
+            "name": ["like", "QR Scan%"]
+        }
+    }
+]
