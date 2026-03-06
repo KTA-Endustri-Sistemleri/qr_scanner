@@ -86,6 +86,23 @@ def remote_unlock(target_user):
 
 
 @frappe.whitelist()
+def get_locked_users():
+    """
+    Sisteme giriş yapan ama ekranı kitli olan (custom_qr_locked=1) kullanıcıları döndürür.
+    Menü yöneticilerinin görebilmesi için Manager ve System Manager yetkisi kontrol edilir.
+    """
+    if not frappe.has_role("QR Scanner Manager") and not frappe.has_role("System Manager"):
+        return []
+    
+    users = frappe.get_all(
+        "User",
+        filters={"custom_qr_locked": 1},
+        fields=["name", "full_name"]
+    )
+    return users
+
+
+@frappe.whitelist()
 def verify_unlock_password(password):
     """Kilit parolasını doğrular (DocType + site_config fallback) ve kilidi kaldırır."""
     try:
