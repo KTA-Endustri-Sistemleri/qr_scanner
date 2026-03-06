@@ -156,7 +156,12 @@ def _extract_client_ip():
 
 
 @frappe.whitelist()
-def create_scan(qr_code: str, scanned_via: str = "USB Scanner", device_id: str = None, client_meta: str = None):
+def create_scan(
+	qr_code: str,
+	scanned_via: str = "USB Scanner",
+	device_id: str | None = None,
+	client_meta: str | None = None,
+):
 	"""
 	QR Scan Record oluşturur ve istemci/cihaz metadatalarını doldurur.
 
