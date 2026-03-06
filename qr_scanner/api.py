@@ -69,7 +69,8 @@ def remote_unlock(target_user):
     Belirli bir hedefin (target_user) kilit ekranını ağ üzerinden uzaktan kaldırır.
     Sadece 'QR Scanner Manager' veya 'System Manager' rolüne sahip olanlar yapabilir.
     """
-    if not frappe.has_role("QR Scanner Manager") and not frappe.has_role("System Manager"):
+    user_roles = frappe.get_roles(frappe.session.user)
+    if "QR Scanner Manager" not in user_roles and "System Manager" not in user_roles:
         return {"ok": False, "msg": _("You do not have permission to unlock users.")}
     
     # 1. DB'de hedef kullanıcının kilidini kaldır
@@ -91,7 +92,8 @@ def get_locked_users():
     Sisteme giriş yapan ama ekranı kitli olan (custom_qr_locked=1) kullanıcıları döndürür.
     Menü yöneticilerinin görebilmesi için Manager ve System Manager yetkisi kontrol edilir.
     """
-    if not frappe.has_role("QR Scanner Manager") and not frappe.has_role("System Manager"):
+    user_roles = frappe.get_roles(frappe.session.user)
+    if "QR Scanner Manager" not in user_roles and "System Manager" not in user_roles:
         return []
     
     users = frappe.get_all(
