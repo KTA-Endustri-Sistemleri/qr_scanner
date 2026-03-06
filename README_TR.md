@@ -5,18 +5,19 @@
 
 ---
 
-## 🆕 v1.2.0’da Neler Değişti (Özet)
+## 🆕 v1.3.1’de Neler Değişti (Özet)
+- **Ön yüz Vue 3 + TypeScript + Pinia tabanına taşındı** ve yeni modern State-Machine mimarisine büründü.
+- **Sunucu Tabanlı Kilit (Server-Side Lock)**: Kilit ekranı kontrolleri güvenlik zafiyeti yaratan `localStorage` donanımından kopartılarak Frappe MariaDB'deki `User` tablosuna bağlandı. Ön belleği temizlemek artık kilidi aşamaz. 
+- **Veritabanı İzolasyonu (UNIQUE Index)**: `QR Scan Record` tablosunun `qr_code` alanına doğrudan `UNIQUE` database index'i eklendi (Race Condition ihtimali tamamen sıfırlandı).
+- **Uzaktan Yönetim Ekranı & WebSocket**: Yöneticiler (`QR Scanner Manager`) Frappe Desk içerisindeki `/app/qr-scanner-locked-users` ekranına giderek sahada kimin kilitli olduğunu anlık görebilir ve `frappe.realtime` sayesinde tek tıkla cihazın yanına gitmeden sahanın kilidini açabilir.
 - **Kart içi opak overlay’ler** toast’ların yerini aldı:
   - 🔄 **İşlem yapılıyor** → mavi overlay (`ui_cooldown_ms` süresi)
   - ✅ **Kayıt edildi** → yeşil overlay (`success_toast_ms` süresi)
   - ⚠️ **Uyarı** → amber overlay (ör.: geçersiz uzunluk)
   - Overlay’ler **tamamen opak**, arka planı gizler ve tıklamaları engeller; ERPNext kartının **içinde** render edilir.
-- **Durum makinesi**: `setIdle()`, `setLoading()`, `setSuccess()`, `setWarning()` ile tutarlı geçişler.
-- **Küçük ekran kilidi** (≤ 420×720): parola ile buton dikey hizalanır, buton %100 genişlik alır.
+- **Küçük ekran kilidi** (≤ 420×720): Vue CSS Grid mimarisi çok daha dar endüstriyel tabletlere/telefonlara tam responsive uyum sağlar (buton ve input alt alta sıralanır).
 - **33 karakter doğrulaması**: İstemci tarafında **33 hane değilse** uyarı overlay’i; sunucu `invalid_length` döner.
 - **Cihaz/istemci metadata**: Tarayıcıdan sessizce toplanır ve her kayda yazılır (bkz. *Metadata*).
-
-> ℹ️ Bu sürüm için DB patch **eklenmedi**. Yeni alanların aktif olması için **reload + migrate** yeterlidir. `qr_code` için UNIQUE index eklemek isterseniz bunu ayrıca (ileride) yapabilirsiniz.
 
 ---
 
