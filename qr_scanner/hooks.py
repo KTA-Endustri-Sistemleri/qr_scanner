@@ -22,11 +22,4 @@ doc_events = {
 # app_include_js = "/assets/qr_scanner/js/some_global.js"
 # app_include_css = "/assets/qr_scanner/css/some_global.css"
 
-fixtures = [
-    {
-        "doctype": "Client Script",
-        "filters": {
-            "name": ["like", "QR Scan%"]
-        }
-    }
-]
+fixtures = [{"doctype": "Client Script", "filters": {"name": ["like", "QR Scan%"]}}]
