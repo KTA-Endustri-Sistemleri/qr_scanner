@@ -69,7 +69,7 @@ def _get_settings_password():
 
 
 @frappe.whitelist()
-def remote_unlock(target_user):
+def remote_unlock(target_user: str):
 	"""
 	Belirli bir hedefin (target_user) kilit ekranını ağ üzerinden uzaktan kaldırır.
 	Sadece 'QR Scanner Manager' veya 'System Manager' rolüne sahip olanlar yapabilir.
@@ -104,7 +104,7 @@ def get_locked_users():
 
 
 @frappe.whitelist()
-def verify_unlock_password(password):
+def verify_unlock_password(password: str):
 	"""Kilit parolasını doğrular (DocType + site_config fallback) ve kilidi kaldırır."""
 	try:
 		expected = _get_settings_password()
@@ -156,7 +156,7 @@ def _extract_client_ip():
 
 
 @frappe.whitelist()
-def create_scan(qr_code, scanned_via="USB Scanner", device_id=None, client_meta=None):
+def create_scan(qr_code: str, scanned_via: str = "USB Scanner", device_id: str = None, client_meta: str = None):
 	"""
 	QR Scan Record oluşturur ve istemci/cihaz metadatalarını doldurur.
 

@@ -28,8 +28,10 @@ class TestQRScannerAPI(FrappeTestCase):
 				{"doctype": "QR Scan Settings", "lock_on_duplicate": 1, "unlock_password": "admin"}
 			).insert(ignore_permissions=True)
 
-		frappe.db.set_value("QR Scan Settings", "QR Scan Settings", "lock_on_duplicate", 1)
-		frappe.db.set_value("QR Scan Settings", "QR Scan Settings", "unlock_password", "admin")
+		doc = frappe.get_single("QR Scan Settings")
+		doc.lock_on_duplicate = 1
+		doc.unlock_password = "admin"
+		doc.save(ignore_permissions=True)
 
 		# Reset any existing records
 		frappe.db.sql("DELETE FROM `tabQR Scan Record`")
@@ -45,7 +47,8 @@ class TestQRScannerAPI(FrappeTestCase):
 		"""Test scanning a valid 33-character QR Code"""
 		valid_code = "123456789012345678901234567890123"
 		res = create_scan(valid_code)
-		self.assertEqual(res.get("status"), "success")
+		self.assertEqual(res.get("ok"), True)
+		self.assertEqual(res.get("created"), True)
 
 		# Ensure it exists in the database
 		self.assertTrue(frappe.db.exists("QR Scan Record", {"qr_code": valid_code}))
@@ -53,7 +56,8 @@ class TestQRScannerAPI(FrappeTestCase):
 	def test_2_invalid_length(self):
 		"""Test scanning a code that is not 33 characters long"""
 		res = create_scan("123")
-		self.assertEqual(res.get("status"), "invalid_length")
+		self.assertEqual(res.get("ok"), False)
+		self.assertEqual(res.get("reason"), "invalid_length")
 
 	def test_3_duplicate_locking(self):
 		"""Test that scanning a duplicate locks the user (Server Side Lock requirement)"""
@@ -61,11 +65,13 @@ class TestQRScannerAPI(FrappeTestCase):
 
 		# First scan -> Success
 		res1 = create_scan(valid_code)
-		self.assertEqual(res1.get("status"), "success")
+		self.assertEqual(res1.get("ok"), True)
+		self.assertEqual(res1.get("created"), True)
 
 		# Second scan -> Duplicate Error
 		res2 = create_scan(valid_code)
-		self.assertEqual(res2.get("status"), "duplicate")
+		self.assertEqual(res2.get("ok"), True)
+		self.assertEqual(res2.get("reason"), "duplicate")
 
 		# Verify Server-Side Lock was triggered on the User
 		is_locked = frappe.db.get_value("User", self.test_user, "custom_qr_locked")
