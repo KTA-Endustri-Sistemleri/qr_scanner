@@ -106,9 +106,21 @@ def _ensure_custom_fields():
         "insert_after": "role_profile_name"
     })
 
+def _ensure_unique_index():
+    """
+    QR Scan Record tablosundaki qr_code hücresine DB seviyesinde eşsiz (UNIQUE) indeks atar.
+    Bu değişiklik Race Condition ihtimalini ortadan kaldırır.
+    """
+    try:
+        from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+        make_property_setter("QR Scan Record", "qr_code", "unique", "1", "Check")
+    except Exception:
+        frappe.log_error("DB UNIQUE Index eklenemedi", "qr_scanner")
+
 def after_migrate():
     _reload_all()
     _ensure_roles()               # istersen yorumlayabilirsin
     _ensure_custom_fields()
+    _ensure_unique_index()
     _ensure_settings_defaults()
     _import_workspace_json()      # migrate sonrası güncel workspace'i içe al

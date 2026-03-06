@@ -64,6 +64,28 @@ def _get_settings_password():
 
 
 @frappe.whitelist()
+def remote_unlock(target_user):
+    """
+    Belirli bir hedefin (target_user) kilit ekranını ağ üzerinden uzaktan kaldırır.
+    Sadece 'QR Scanner Manager' veya 'System Manager' rolüne sahip olanlar yapabilir.
+    """
+    if not frappe.has_role("QR Scanner Manager") and not frappe.has_role("System Manager"):
+        return {"ok": False, "msg": _("You do not have permission to unlock users.")}
+    
+    # 1. DB'de hedef kullanıcının kilidini kaldır
+    frappe.db.set_value("User", target_user, "custom_qr_locked", 0, update_modified=False)
+    
+    # 2. WebSocket sinyali gönder. Sadece o kullanıcıya (user=target_user) gitsin.
+    frappe.publish_realtime(
+        event="qr_unlock_remote",
+        message={"user": target_user, "status": "unlocked"},
+        user=target_user
+    )
+    
+    return {"ok": True, "msg": _("Unlock signal sent.")}
+
+
+@frappe.whitelist()
 def verify_unlock_password(password):
     """Kilit parolasını doğrular (DocType + site_config fallback) ve kilidi kaldırır."""
     try:
@@ -205,6 +227,15 @@ def create_scan(qr_code, scanned_via="USB Scanner", device_id=None, client_meta=
         doc.insert(ignore_permissions=True)
         frappe.db.commit()
         return {"ok": True, "created": True, "name": doc.name}
+    
+    # Yeni UNIQUE SQL hatası yakalama noktası
+    except frappe.UniqueValidationError:
+        if frappe.db.is_transaction_active():
+            frappe.db.rollback()
+        # Sunucuda tekrar kilidi aktif et
+        frappe.db.set_value("User", frappe.session.user, "custom_qr_locked", 1, update_modified=False)
+        return {"ok": True, "created": False, "reason": "duplicate", "msg": "Race Condition Engellendi, Aynı kayıttı."}
+
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "QR Scanner: create_scan failed")
         # >>> buradaki msg istemcide gösterilecek

@@ -136,6 +136,17 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
       if (saved) cachedModel = saved;
     } catch { }
     ensureBackgroundModel().then(m => { if (m) cachedModel = m; }).catch(() => { });
+
+    // WebSocket / Realtime dinleyicisi (Yönetici uzaktan kilidi açtığında tetiklenir)
+    if (frappe.realtime) {
+      frappe.realtime.on('qr_unlock_remote', (data: any) => {
+        if (data && data.status === 'unlocked' && state.isLocked) {
+          releaseLock();
+          hBeep(880, 110); hVibrate(40);
+          frappe.show_alert({ message: 'Lock released remotely by manager.', indicator: 'green' });
+        }
+      });
+    }
   }
 
   function canSubmit() { return !state.isLocked && !state.inFlight; }
