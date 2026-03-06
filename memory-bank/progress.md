@@ -7,6 +7,7 @@
 - **Server-Side Locking mechanism functions flawlessly: The lock state is now stored in the database (`custom_qr_locked` on `User`), bypassing `localStorage` exploits.**
 - **Strong Duplicate Constraint**: Database level UNIQUE indexing on `qr_code` acts as an absolute wall against milisecond race conditions.
 - **Remote Unlock via WebSocket**: Administrators (`QR Scanner Manager`) can trigger unlocks server-side, which instantly broadcasts unlocking payloads via Socket.io allowing workers to continue uninterrupted.
+- **Locked Users Administrative Dashboard**: Integrated a standalone Frappe Page (`/app/qr-scanner-locked-users`) with a real-time tracking Vue 3 interface that enables QR Scanner Managers to visually monitor all locked terminals across the factory/warehouse and one-click unlock them remotely.
 - Successful scans log their respective metadata (`device_label`, `client_platform`, `client_user_agent`, `client_hw_threads`, IP address) silently without hindering the operator workflow.
 - Secure fallback authentication using `hmac` for admin-overrides successfully unblocks the client lock.
 
