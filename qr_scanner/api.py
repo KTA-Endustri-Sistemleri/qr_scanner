@@ -36,9 +36,16 @@ def get_client_settings():
         for k in defaults.keys():
             if k in data and data.get(k) is not None:
                 defaults[k] = data.get(k)
+                
+        # Server-side lock flag'ini client'a gönder (önbelleğe yakalanmaması için doğrudan DB okur)
+        locked = frappe.db.get_value("User", frappe.session.user, "custom_qr_locked")
+        defaults["server_locked"] = bool(locked)
+
         return defaults
     except Exception:
         # Buraya düşüyorsa ya import yolu hatalıdır ya da DocType henüz migrate edilmemiştir
+        locked_fallback = frappe.db.get_value("User", frappe.session.user, "custom_qr_locked", ignore=True)
+        defaults["server_locked"] = bool(locked_fallback)
         return defaults
 
 
@@ -58,12 +65,17 @@ def _get_settings_password():
 
 @frappe.whitelist()
 def verify_unlock_password(password):
-    """Kilit parolasını doğrular (DocType + site_config fallback)."""
+    """Kilit parolasını doğrular (DocType + site_config fallback) ve kilidi kaldırır."""
     try:
         expected = _get_settings_password()
         if not expected:
             return {"ok": False, "reason": "not_configured"}
         ok = hmac.compare_digest(str(password or ""), expected)
+        
+        if ok:
+            # Doğruysa server'daki kilidi kaldır (sessizce)
+            frappe.db.set_value("User", frappe.session.user, "custom_qr_locked", 0, update_modified=False)
+            
         return {"ok": bool(ok)}
     except Exception:
         frappe.log_error("verify_unlock_password failed", "qr_scanner")
@@ -142,8 +154,15 @@ def create_scan(qr_code, scanned_via="USB Scanner", device_id=None, client_meta=
     if not isinstance(client_meta, dict):
         client_meta = {}
 
+    # Lock kısa devre: Sunucu zaten kilitliyse taramayı toptan reddet.
+    is_locked = frappe.db.get_value("User", frappe.session.user, "custom_qr_locked")
+    if is_locked:
+        return {"ok": False, "created": False, "reason": "already_locked", "msg": _("A duplicate was previously scanned. Please unlock first.")}
+
     # Duplicate kısa devre
     if frappe.db.exists("QR Scan Record", {"qr_code": qr_code}):
+        # Sunucuda kilidi aktif et (Sessizce: update_modified=False cache patlatmaz)
+        frappe.db.set_value("User", frappe.session.user, "custom_qr_locked", 1, update_modified=False)
         return {"ok": True, "created": False, "reason": "duplicate"}
 
     # Sunucuda IP yakala

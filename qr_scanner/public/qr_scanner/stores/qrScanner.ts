@@ -44,8 +44,8 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
   let cachedModel: string | null = null;
 
   // --- Helpers ---
-  function hBeep(freq = 880, ms = 110) { if (CFG.beep_enabled) try { hwBeep(freq, ms); } catch {} }
-  function hVibrate(ms = 60) { if (CFG.vibrate_enabled) try { hwVibrate(ms); } catch {} }
+  function hBeep(freq = 880, ms = 110) { if (CFG.beep_enabled) try { hwBeep(freq, ms); } catch { } }
+  function hVibrate(ms = 60) { if (CFG.vibrate_enabled) try { hwVibrate(ms); } catch { } }
   function now() { return Date.now(); }
 
   function clearTimers() {
@@ -66,19 +66,19 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
     cooldownEndsAt = now() + dur;
   }
   function scheduleWarningAfterCooldown(msg?: string, onDone?: () => void) {
-  const remaining = Math.max(0, cooldownEndsAt - now());
-  if (toSuccessTimer) clearTimeout(toSuccessTimer);
-  toSuccessTimer = setTimeout(() => {
-    state.warnMsg = msg || 'Code must be exactly 33 characters. Please rescan.';
-    state.mode = 'warning';
-    const dur = Number(CFG.success_toast_ms || 1500);
-    if (successHideTimer) clearTimeout(successHideTimer);
-    successHideTimer = setTimeout(() => {
-      state.mode = 'none';
-      state.inFlight = false;
-      onDone?.();
-    }, dur);
-  }, remaining);
+    const remaining = Math.max(0, cooldownEndsAt - now());
+    if (toSuccessTimer) clearTimeout(toSuccessTimer);
+    toSuccessTimer = setTimeout(() => {
+      state.warnMsg = msg || 'Code must be exactly 33 characters. Please rescan.';
+      state.mode = 'warning';
+      const dur = Number(CFG.success_toast_ms || 1500);
+      if (successHideTimer) clearTimeout(successHideTimer);
+      successHideTimer = setTimeout(() => {
+        state.mode = 'none';
+        state.inFlight = false;
+        onDone?.();
+      }, dur);
+    }, remaining);
   }
   function scheduleSuccess(name?: string | null, onDone?: () => void) {
     const remaining = Math.max(0, cooldownEndsAt - now());
@@ -103,13 +103,13 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
     state.lockDesc = reason === 'duplicate'
       ? 'Duplicate detected. Enter admin password to continue.'
       : 'Enter admin password to continue.';
-    try { localStorage.setItem('qr_lock', reason || 'duplicate'); } catch {}
+    // Removed: localStorage.setItem('qr_lock', ...)
   }
   function releaseLock() {
     state.isLocked = false;
     state.lockBusy = false;
     state.lockError = null;
-    try { localStorage.removeItem('qr_lock'); } catch {}
+    // Removed: localStorage.removeItem('qr_lock')
     lastCode = ''; lastTime = 0; state.inFlight = false; state.mode = 'none';
   }
   function showLockError(msg?: string) { state.lockError = msg || 'Error'; }
@@ -119,18 +119,23 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
     // settings
     try {
       const r = await frappe.call({ method: 'qr_scanner.api.get_client_settings' });
-      if (r?.message) Object.assign(CFG, r.message);
-    } catch {}
+      if (r?.message) {
+        Object.assign(CFG, r.message);
+        // Sunucu bazlı kilit durumu geri yüklemesi
+        if (CFG.server_locked) {
+          engageLock('duplicate');
+        }
+      }
+    } catch { }
 
-    // lock restore
-    try { const ls = localStorage.getItem('qr_lock'); if (ls) state.isLocked = true; } catch {}
+    // lock restore (removed localStorage based logic)
 
     // device model cache
     try {
       const saved = localStorage.getItem('qr_device_model_he');
       if (saved) cachedModel = saved;
-    } catch {}
-    ensureBackgroundModel().then(m => { if (m) cachedModel = m; }).catch(() => {});
+    } catch { }
+    ensureBackgroundModel().then(m => { if (m) cachedModel = m; }).catch(() => { });
   }
 
   function canSubmit() { return !state.isLocked && !state.inFlight; }
@@ -146,7 +151,7 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
     if (trimmed.length !== 33) {
       startCooldown(CFG.ui_cooldown_ms);
       hBeep(300, 140); hVibrate(90);
-      scheduleWarningAfterCooldown('Code must be exactly 33 characters. Please rescan.',afterIdleFocus);
+      scheduleWarningAfterCooldown('Code must be exactly 33 characters. Please rescan.', afterIdleFocus);
       return;
     }
 
@@ -173,6 +178,9 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
       } else if (m.reason === 'duplicate') {
         if (CFG.lock_on_duplicate) engageLock('duplicate');
         else { frappe.show_alert({ message: 'Duplicate: already scanned.', indicator: 'red' }); abortToIdle(); afterIdleFocus?.(); }
+        hBeep(220, 160); hVibrate(90);
+      } else if (m.reason === 'already_locked') {
+        engageLock('duplicate');
         hBeep(220, 160); hVibrate(90);
       } else {
         const serverMsg =
@@ -211,7 +219,7 @@ export const useQrScannerStore = defineStore('qrScanner', () => {
         hBeep(220, 160); hVibrate(90);
       }
     },
-    (_err: any) => {
+      (_err: any) => {
         showLockError('Server unreachable.');
         hBeep(220, 160); hVibrate(90);
       }

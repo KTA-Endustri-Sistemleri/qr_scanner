@@ -92,8 +92,23 @@ def after_install():
     _import_workspace_json()      # Workspace'i içe al
 
 
+def _ensure_custom_fields():
+    """
+    Kilit ekranının durumunu tutmak için User tablosuna gizli bir alan ekler.
+    """
+    frappe.custom.doctype.custom_field.custom_field.create_custom_field("User", {
+        "fieldname": "custom_qr_locked",
+        "label": "QR Locked",
+        "fieldtype": "Check",
+        "default": "0",
+        "hidden": 1,         # Kullanıcı arayüzünde Desk'te gizle
+        "read_only": 1,      # Kullanıcının manuel değiştirmesini engelle
+        "insert_after": "role_profile_name"
+    })
+
 def after_migrate():
     _reload_all()
     _ensure_roles()               # istersen yorumlayabilirsin
+    _ensure_custom_fields()
     _ensure_settings_defaults()
     _import_workspace_json()      # migrate sonrası güncel workspace'i içe al

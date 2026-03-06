@@ -92,7 +92,7 @@ defineExpose({ inputEl, formEl, btnEl });
 <style scoped>
 .qr-lock{position:fixed;inset:0;background:#dc3545;z-index:10000;display:none;color:#fff}
 .qr-lock.show{display:flex}
-.qr-lock-inner{margin:auto;width:min(560px,90vw);background:rgba(0,0,0,.18);border-radius:14px;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.35);backdrop-filter:blur(2px)}
+.qr-lock-inner{margin:auto;width:min(560px,90vw);background:rgba(0,0,0,.18);border-radius:14px;padding:20px;box-shadow: 0 12px 40px #000000;backdrop-filter:blur(2px)}
 .qr-lock-title{font-size:1.15rem;font-weight:700;margin-bottom:6px}
 .qr-lock-desc{opacity:.9;margin-bottom:14px}
 .qr-lock-form{display:flex;gap:8px}
