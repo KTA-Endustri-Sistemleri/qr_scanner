@@ -5,23 +5,19 @@ On a **duplicate**, a **fullscreen red lock** appears — requires an **admin pa
 
 ---
 
-## 🆕 What's New in v1.3.0 (Summary)
-- **Frontend rebuilt on **Vue 3 + TypeScript + Pinia** with the same user-facing behaviors:
-  - In-card opaque overlays (loading/success/warning) with server-driven timings
-  - Fullscreen red lock on duplicates (persist + unlock)
-  - 33-char validation, debounce, and haptics unchanged
-  - Device/client metadata collected via composables
+## 🆕 What's New in v1.3.1 (Summary)
+- **Frontend rebuilt on Vue 3 + TypeScript + Pinia** with modern state-machine architecture.
+- **Bulletproof Server-Side Locking**: Duplicate lock screens are now strictly enforced via the MariaDB backend instead of `localStorage`. Clearing browser cache will no longer bypass the screen.
+- **Database Hardened**: A strict `UNIQUE` index constraint is now dynamically assigned to the `qr_code` column, mathematically eliminating duplicate record race conditions.
+- **WebSocket Remote Unlock Dashboard**: Administrators (`QR Scanner Manager`) can visit `/app/qr-scanner-locked-users` to natively see all locked factory terminals and unlock them remotely with a single click. The operator's lock screen will vanish instantly via `frappe.realtime` (Socket.io).
 - **In-card opaque overlays** replace floating toasts:
   - 🔄 **Processing** → blue overlay (duration from `ui_cooldown_ms`)
   - ✅ **Saved** → green overlay (duration from `success_toast_ms`)
   - ⚠️ **Warning** → amber overlay (e.g., invalid QR length)
   - Overlays are fully opaque (no transparency) and **block input**, rendered *inside* the ERPNext card.
-- **State machine UI**: predictable transitions via `setIdle()`, `setLoading()`, `setSuccess()`, `setWarning()`.
-- **Small-screen lock UX** (≤ 420×720): password and unlock button stack vertically; unlock button is full-width.
-- **33‑char validation**: Client-side rejects codes that are not exactly **33 characters** with a warning overlay; server returns `invalid_length`.
-- **Device & client metadata**: Collected silently from the browser and stored per record (see *Metadata* below).
-
-> ℹ️ No DB patch was added for this release. See **Migration** for simple reload/migrate steps. You may add a UNIQUE index for `qr_code` separately if you prefer, but it's optional here.
+- **Small-screen lock UX** (≤ 420×720): responsive grids and CSS refinements handle terminals down to 320px wide gracefully.
+- **33‑char validation**: Client-side rejects codes that are not exactly **33 characters** with a warning overlay.
+- **Device & client metadata**: Collected silently from the browser and stored per record.
 
 ---
 
