@@ -1,6 +1,6 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from qr_scanner.qr_scanner.api import create_scan, get_locked_users, remote_unlock, verify_unlock_password
+from qr_scanner.api import create_scan, get_locked_users, remote_unlock, verify_unlock_password
 
 class TestQRScannerAPI(FrappeTestCase):
     def setUp(self):
