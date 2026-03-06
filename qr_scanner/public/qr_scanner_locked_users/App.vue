@@ -157,4 +157,26 @@ onUnmounted(() => {
 .locked-item:hover {
   background: var(--bg-color);
 }
+
+@media (max-width: 420px) {
+  .list-headers {
+    display: none !important; /* Extremely small screens don't need headers to save space */
+  }
+  
+  .locked-item {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+    padding: 16px 12px !important;
+  }
+  
+  .item-actions {
+    text-align: left !important;
+  }
+  
+  .btn-danger {
+    width: 100%;
+    justify-content: center;
+    padding: 10px;
+  }
+}
 </style>
